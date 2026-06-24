@@ -32,7 +32,7 @@ export default function StaffAuthContent() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username,
+        username: username.trim(),
         pin,
         next,
         portal: "admin",

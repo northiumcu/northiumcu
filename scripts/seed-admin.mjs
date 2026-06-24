@@ -32,7 +32,9 @@ const ADMIN = {
   staffRole: "super_administrator",
 };
 
-function generatePin() {
+function resolvePin() {
+  const fromEnv = process.env.ADMIN_BOOTSTRAP_PIN?.trim();
+  if (fromEnv && /^\d{6}$/.test(fromEnv)) return fromEnv;
   return String(randomInt(100000, 1000000));
 }
 
@@ -140,7 +142,7 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
 }
 
 try {
-  const pin = generatePin();
+  const pin = resolvePin();
   const result = await upsertAdmin({ ...ADMIN, pin });
 
   console.log("Northium admin account ready:\n");

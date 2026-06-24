@@ -28,4 +28,5 @@ export const adminNav = [
   { label: "Reports", href: "/hard/reports", icon: "bar-chart-3" },
   { label: "Settings", href: "/hard/settings", icon: "settings" },
   { label: "Security", href: "/hard/security", icon: "shield" },
+  { label: "Emails", href: "/hard/email-preview", icon: "file-text" },
 ] as const;

@@ -1,4 +1,7 @@
-import { institution } from "@/lib/institution";
+import {
+  buildOtpLoginEmail,
+  buildOtpSignupEmail,
+} from "@/lib/email/templates/catalog";
 import { sendResendEmail } from "@/lib/email/resend";
 
 export async function sendOtpEmail({
@@ -10,20 +13,18 @@ export async function sendOtpEmail({
   code: string;
   purpose: "login" | "signup";
 }) {
-  const subject =
+  const message =
     purpose === "login"
-      ? `${institution.shortName} sign-in verification code`
-      : `${institution.shortName} membership verification code`;
-
-  const body = `Your Northium verification code is: ${code}
-
-This code expires in 10 minutes. If you did not request this, contact ${institution.supportEmail} immediately.
-
-${institution.name}
-${institution.tagline}`;
+      ? buildOtpLoginEmail(code)
+      : buildOtpSignupEmail(code);
 
   try {
-    await sendResendEmail({ to, subject, text: body });
+    await sendResendEmail({
+      to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
   } catch (error) {
     console.error("[Northium OTP] Email delivery failed:", error);
     console.info(`[Northium OTP] ${purpose} → ${to}: ${code}`);

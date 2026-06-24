@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     const { username, pin, next, portal } = parsed.data;
     const admin = createAdminClient();
-    const normalizedUsername = username.toLowerCase();
+    const normalizedUsername = username.trim().toLowerCase();
     const isAdminPortal = portal === "admin";
 
     const { data: profile, error } = await admin

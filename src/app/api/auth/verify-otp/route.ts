@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSensitive, verifyOtp } from "@/lib/auth/crypto";
 import { resolvePostLoginPath } from "@/lib/auth/admin-paths";
+import { sendWelcomeMemberEmail } from "@/lib/email/send-welcome";
 import { otpVerifySchema } from "@/lib/auth/validators";
 
 export async function POST(request: Request) {
@@ -149,6 +150,11 @@ export async function POST(request: Request) {
           { status: 200 }
         );
       }
+
+      await sendWelcomeMemberEmail({
+        to: pending.email,
+        firstName: pending.first_name,
+      });
 
       return NextResponse.json({
         verified: true,

@@ -1,4 +1,8 @@
 import { institution } from "@/lib/institution";
+import {
+  buildContactConfirmationEmail,
+  buildContactInternalEmail,
+} from "@/lib/email/templates/catalog";
 import { sendResendEmail } from "@/lib/email/resend";
 
 const TOPIC_LABELS: Record<string, string> = {
@@ -17,27 +21,28 @@ export type ContactSubmission = {
 };
 
 export async function sendContactNotification(submission: ContactSubmission) {
-  const topicLabel = TOPIC_LABELS[submission.topic] ?? submission.topic;
-  const submittedAt = new Date().toISOString();
-
-  const body = `New contact form submission on ${institution.domain}
-
-Submitted: ${submittedAt}
-
-Name: ${submission.name}
-Email: ${submission.email}
-Topic: ${topicLabel}
-
-Message:
-${submission.message}
-
----
-Reply directly to ${submission.email} when responding.`;
+  const internal = buildContactInternalEmail(submission);
+  const confirmation = buildContactConfirmationEmail({
+    name: submission.name,
+    topic: submission.topic,
+  });
 
   await sendResendEmail({
     to: institution.supportEmail,
     replyTo: submission.email,
-    subject: `[Contact] ${topicLabel} — ${submission.name}`,
-    text: body,
+    subject: internal.subject,
+    text: internal.text,
+    html: internal.html,
   });
+
+  try {
+    await sendResendEmail({
+      to: submission.email,
+      subject: confirmation.subject,
+      text: confirmation.text,
+      html: confirmation.html,
+    });
+  } catch (error) {
+    console.error("[Northium Contact] Confirmation email failed:", error);
+  }
 }
