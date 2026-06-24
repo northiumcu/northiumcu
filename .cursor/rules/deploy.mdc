@@ -1,0 +1,13 @@
+---
+description: When the user says deploy, always commit, push, and deploy to Vercel production.
+alwaysApply: true
+---
+
+When the user asks to **deploy**, treat it as the full pipeline:
+
+1. `git add` relevant changes
+2. `git commit` with a clear message
+3. `git push` to the remote branch
+4. `vercel --prod` (or equivalent production deploy)
+
+Do not deploy without committing and pushing unless the user explicitly says otherwise.

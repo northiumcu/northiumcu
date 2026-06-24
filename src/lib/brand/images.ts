@@ -2,7 +2,7 @@ import type { VisualKey } from "@/lib/brand/visuals";
 
 /**
  * Local institutional photography (Unsplash License).
- * Architectural, operational, and security-focused — no commercial stock actors.
+ * Each visual key maps to a unique image — no duplicates across sections.
  */
 
 export interface BankingPhoto {
@@ -20,8 +20,8 @@ export const bankingImages: Record<VisualKey, BankingPhoto> = {
     alt: "Northium Credit Union branch with members and staff throughout the hall",
   },
   institutionHero: {
-    src: "/images/banking/bank-hall.webp",
-    alt: "Busy Northium branch with teller lines, lounge seating, and member services",
+    src: "/images/banking/teller-service.webp",
+    alt: "Member services team reviewing accounts at a consultation desk",
   },
   accounts: {
     src: "/images/banking/accounts.webp",
@@ -51,22 +51,34 @@ export const bankingImages: Record<VisualKey, BankingPhoto> = {
     src: "/images/banking/portal.webp",
     alt: "Contemporary office interior with collaborative seating",
   },
+  support: {
+    src: "/images/banking/member-support.webp",
+    alt: "Member support specialist ready to assist by phone and email",
+  },
+  collaboration: {
+    src: "/images/banking/team-collaboration.webp",
+    alt: "Northium team collaborating on member service initiatives",
+  },
+  application: {
+    src: "/images/banking/product-planning.webp",
+    alt: "Membership application and account opening documents on a desk",
+  },
 };
 
 export const productImages = [
   "/images/banking/product-checking.webp",
-  "/images/banking/accounts.webp",
-  "/images/banking/security.webp",
+  "/images/banking/product-savings.webp",
+  "/images/banking/product-certificate.webp",
   "/images/banking/product-auto.webp",
   "/images/banking/product-planning.webp",
-  "/images/banking/cards.webp",
+  "/images/banking/product-cards.webp",
 ] as const;
 
 export const productImageAlts = [
   "Contactless payment at checkout",
-  "Savings and long-term financial growth",
-  "Secure certificate deposit storage",
-  "Vehicle on a scenic road",
-  "Financial planning documents on a desk",
-  "Credit card payment terminal",
+  "Piggy bank representing steady savings growth",
+  "Financial documents for fixed-term certificate planning",
+  "Vehicle on a scenic road for auto financing",
+  "Financial planning documents for personal lending",
+  "Card payment at a retail terminal",
 ] as const;

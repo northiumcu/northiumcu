@@ -27,11 +27,6 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: optionalString(),
   AUTH_ENCRYPTION_KEY: optionalString(),
   RESEND_API_KEY: optionalString(),
-  PLAID_CLIENT_ID: optionalString(),
-  PLAID_SECRET: optionalString(),
-  PLAID_ENV: z.enum(["sandbox", "development", "production"]).optional(),
-  STRIPE_SECRET_KEY: optionalString(),
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: optionalString(),
 });
 
 export type Env = z.infer<typeof envSchema>;

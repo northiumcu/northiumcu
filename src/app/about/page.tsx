@@ -43,6 +43,7 @@ export default function AboutPage() {
       <CTASection
         title="Join a financial institution that puts you first."
         description="Become a member-owner of Northium Credit Union and experience banking built on trust."
+        visual="membership"
       />
     </PublicLayout>
   );

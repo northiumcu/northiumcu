@@ -5,7 +5,7 @@ export default function AdminPage() {
   return (
     <>
       <PortalBanner
-        visual="institution"
+        visual="collaboration"
         title="Institution Overview"
         description="Operational metrics will appear here once reporting services are connected."
       />

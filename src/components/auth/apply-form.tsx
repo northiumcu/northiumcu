@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { AccountType } from "@/lib/database/enums";
 import {
   ELIGIBILITY_OPTIONS,
-  MEMBERSHIP_ACCOUNT_OPTIONS,
+  PRIMARY_MEMBERSHIP_ACCOUNT_OPTIONS,
 } from "@/lib/auth/membership-options";
 import { PublicLayout } from "@/components/layout/public-layout";
 import { PageHeader } from "@/components/marketing/page-header";
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OtpVerificationForm } from "@/components/auth/otp-verification-form";
-import { cn } from "@/lib/utils";
+import { MathVerificationField } from "@/components/forms/math-verification-field";
 
 export function ApplyForm() {
   const router = useRouter();
@@ -24,6 +24,9 @@ export function ApplyForm() {
   const [error, setError] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [emailLabel, setEmailLabel] = useState("");
+  const [humanCheckToken, setHumanCheckToken] = useState("");
+  const [humanCheckQuestion, setHumanCheckQuestion] = useState("");
+  const [humanCheckAnswer, setHumanCheckAnswer] = useState("");
 
   const [form, setForm] = useState({
     username: "",
@@ -34,23 +37,11 @@ export function ApplyForm() {
     pin: "",
     confirmPin: "",
     eligibilityCategory: ELIGIBILITY_OPTIONS[0],
-    requestedAccountTypes: ["checking"] as AccountType[],
+    requestedAccountType: "checking" as AccountType,
   });
 
   function updateField(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function toggleAccountType(type: AccountType) {
-    setForm((prev) => {
-      const selected = prev.requestedAccountTypes.includes(type)
-        ? prev.requestedAccountTypes.filter((item) => item !== type)
-        : [...prev.requestedAccountTypes, type];
-      return {
-        ...prev,
-        requestedAccountTypes: selected.length > 0 ? selected : [type],
-      };
-    });
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -70,7 +61,9 @@ export function ApplyForm() {
         pin: form.pin,
         confirmPin: form.confirmPin,
         eligibilityCategory: form.eligibilityCategory,
-        requestedAccountTypes: form.requestedAccountTypes,
+        requestedAccountType: form.requestedAccountType,
+        humanCheckToken,
+        humanCheckAnswer: Number(humanCheckAnswer),
       }),
     });
 
@@ -79,6 +72,9 @@ export function ApplyForm() {
 
     if (!response.ok) {
       setError(typeof data.error === "string" ? data.error : "Application failed.");
+      if (typeof data.error === "string" && data.error.includes("verification")) {
+        setHumanCheckToken("");
+      }
       return;
     }
 
@@ -92,7 +88,7 @@ export function ApplyForm() {
         eyebrow="Membership Application"
         title="Join Northium Credit Union"
         description="One secure application. Verify your email, sign in, then complete identity verification in your member portal."
-        visual="membership"
+        visual="application"
       />
       <ContentSection>
         <div className="mx-auto max-w-2xl">
@@ -205,58 +201,56 @@ export function ApplyForm() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <Label>Account Types</Label>
-                    <p className="text-xs text-northium-muted">
-                      Tap to select one or more accounts to open, such as checking
-                      and savings.
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {MEMBERSHIP_ACCOUNT_OPTIONS.map((option) => {
-                        const selected = form.requestedAccountTypes.includes(
-                          option.value
-                        );
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => toggleAccountType(option.value)}
-                            className={cn(
-                              "rounded-xl border px-4 py-3 text-left transition-colors",
-                              selected
-                                ? "border-northium-gold bg-northium-gold/10"
-                                : "border-northium-border bg-white hover:border-northium-gold/50"
-                            )}
-                          >
-                            <p className="font-heading text-sm font-semibold text-northium-primary">
-                              {option.label}
-                            </p>
-                            <p className="mt-1 text-xs text-northium-muted">
-                              {option.description}
-                            </p>
-                          </button>
-                        );
-                      })}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="accountType">Account type</Label>
+                      <select
+                        id="accountType"
+                        value={form.requestedAccountType}
+                        onChange={(e) =>
+                          updateField("requestedAccountType", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                      >
+                        {PRIMARY_MEMBERSHIP_ACCOUNT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-northium-muted">
+                        A savings account is included with every membership.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="eligibility">Eligibility category</Label>
+                      <select
+                        id="eligibility"
+                        value={form.eligibilityCategory}
+                        onChange={(e) =>
+                          updateField("eligibilityCategory", e.target.value)
+                        }
+                        className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                      >
+                        {ELIGIBILITY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="eligibility">Eligibility Category</Label>
-                    <select
-                      id="eligibility"
-                      value={form.eligibilityCategory}
-                      onChange={(e) =>
-                        updateField("eligibilityCategory", e.target.value)
-                      }
-                      className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
-                    >
-                      {ELIGIBILITY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <MathVerificationField
+                    token={humanCheckToken}
+                    question={humanCheckQuestion}
+                    answer={humanCheckAnswer}
+                    onTokenChange={setHumanCheckToken}
+                    onQuestionChange={setHumanCheckQuestion}
+                    onAnswerChange={setHumanCheckAnswer}
+                    disabled={loading}
+                  />
 
                   {error && (
                     <p className="text-sm text-red-600" role="alert">
@@ -266,10 +260,10 @@ export function ApplyForm() {
 
                   <Button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || !humanCheckToken}
                     className="w-full bg-northium-gold text-northium-primary hover:bg-northium-gold/90"
                   >
-                    {loading ? "Submitting..." : "Submit & Send Verification Code"}
+                    {loading ? "Submitting..." : "Submit"}
                   </Button>
                 </form>
               )}

@@ -1,10 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/env";
+import {
+  ADMIN_AUTH_PATH,
+  isAdminAuthPath,
+  isAdminConsolePath,
+  isLegacyAdminPath,
+} from "@/lib/auth/admin-paths";
 import { X_ROBOTS_TAG } from "@/lib/security/crawl-block";
 
 const MEMBER_PREFIX = "/member";
-const ADMIN_PREFIX = "/admin";
 
 function withCrawlBlock(response: NextResponse): NextResponse {
   response.headers.set("X-Robots-Tag", X_ROBOTS_TAG);
@@ -21,16 +26,22 @@ export async function updateSession(request: NextRequest) {
 }
 
 async function runSession(request: NextRequest) {
-  let supabaseResponse = withCrawlBlock(NextResponse.next({ request }));
   const pathname = request.nextUrl.pathname;
 
+  if (isLegacyAdminPath(pathname)) {
+    return withCrawlBlock(
+      NextResponse.rewrite(new URL("/not-found", request.url))
+    );
+  }
+
+  let supabaseResponse = withCrawlBlock(NextResponse.next({ request }));
+
   if (!isSupabaseConfigured()) {
-    if (
-      pathname.startsWith(MEMBER_PREFIX) ||
-      pathname.startsWith(ADMIN_PREFIX)
-    ) {
+    if (pathname.startsWith(MEMBER_PREFIX) || isAdminConsolePath(pathname)) {
       const signInUrl = request.nextUrl.clone();
-      signInUrl.pathname = "/sign-in";
+      signInUrl.pathname = isAdminConsolePath(pathname)
+        ? ADMIN_AUTH_PATH
+        : "/sign-in";
       signInUrl.searchParams.set("next", pathname);
       return withCrawlBlock(NextResponse.redirect(signInUrl));
     }
@@ -62,17 +73,39 @@ async function runSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isProtected =
-    pathname.startsWith(MEMBER_PREFIX) || pathname.startsWith(ADMIN_PREFIX);
+  if (isAdminAuthPath(pathname) && user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("staff_role")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  if (isProtected && !user) {
+    if (profile && profile.staff_role !== "member") {
+      const consoleUrl = request.nextUrl.clone();
+      consoleUrl.pathname = "/hard";
+      consoleUrl.search = "";
+      return withCrawlBlock(NextResponse.redirect(consoleUrl));
+    }
+  }
+
+  const isMemberProtected = pathname.startsWith(MEMBER_PREFIX);
+  const isStaffProtected = isAdminConsolePath(pathname);
+
+  if (isMemberProtected && !user) {
     const signInUrl = request.nextUrl.clone();
     signInUrl.pathname = "/sign-in";
     signInUrl.searchParams.set("next", pathname);
     return withCrawlBlock(NextResponse.redirect(signInUrl));
   }
 
-  if (pathname.startsWith(ADMIN_PREFIX) && user) {
+  if (isStaffProtected && !user) {
+    const staffAuthUrl = request.nextUrl.clone();
+    staffAuthUrl.pathname = ADMIN_AUTH_PATH;
+    staffAuthUrl.searchParams.set("next", pathname);
+    return withCrawlBlock(NextResponse.redirect(staffAuthUrl));
+  }
+
+  if (isStaffProtected && user) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("staff_role")

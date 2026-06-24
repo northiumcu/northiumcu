@@ -14,7 +14,7 @@
     "db:validate": "node scripts/validate-migrations.mjs",
     "test": "node --experimental-strip-types --test tests/**/*.test.ts",
     "test:db": "npm run db:validate && npm run test",
-    "seed:users": "node scripts/seed-test-users.mjs"
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

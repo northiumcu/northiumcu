@@ -19,15 +19,34 @@ const interTight = Inter_Tight({
   weight: ["400", "500", "600", "700", "800"],
 });
 
+const siteDescription =
+  "Secure accounts, lending solutions and member-first banking for individuals and families.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(institution.productionUrl),
   title: {
     default: institution.name,
     template: `%s | ${institution.name}`,
   },
-  description:
-    "Secure accounts, lending solutions and member-first banking for individuals and families.",
+  description: siteDescription,
+  applicationName: institution.shortName,
   themeColor: "#081827",
+  alternates: {
+    canonical: institution.productionUrl,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: institution.productionUrl,
+    siteName: institution.name,
+    title: institution.name,
+    description: siteDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: institution.name,
+    description: siteDescription,
+  },
   robots: {
     index: false,
     follow: false,

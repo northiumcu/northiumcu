@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  resolvePostLoginPath,
+} from "@/lib/auth/admin-paths";
 import { generateOtpCode, hashOtp, verifyPin } from "@/lib/auth/crypto";
 import { loginSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
@@ -15,9 +18,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username, pin } = parsed.data;
+    const { username, pin, next, portal } = parsed.data;
     const admin = createAdminClient();
     const normalizedUsername = username.toLowerCase();
+    const isAdminPortal = portal === "admin";
 
     const { data: profile, error } = await admin
       .from("profiles")
@@ -32,6 +36,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const isStaff = profile.staff_role !== "member";
+
+    if (isAdminPortal && !isStaff) {
+      return NextResponse.json(
+        { error: "Invalid username or PIN." },
+        { status: 401 }
+      );
+    }
+
+    if (!isAdminPortal && isStaff) {
+      return NextResponse.json(
+        { error: "Invalid username or PIN." },
+        { status: 401 }
+      );
+    }
+
     if (!verifyPin(pin, profile.pin_hash)) {
       return NextResponse.json(
         { error: "Invalid username or PIN." },
@@ -40,9 +60,10 @@ export async function POST(request: Request) {
     }
 
     const otp = generateOtpCode();
-    const next = typeof body.next === "string" ? body.next : undefined;
-    const defaultNext =
-      profile.staff_role !== "member" ? "/admin" : "/member";
+    const redirectTo = resolvePostLoginPath(
+      next,
+      isStaff
+    );
 
     const { data: challenge, error: otpError } = await admin
       .from("auth_otp_challenges")
@@ -52,7 +73,7 @@ export async function POST(request: Request) {
         purpose: "login",
         code_hash: hashOtp(otp),
         expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        metadata: { next: next ?? defaultNext },
+        metadata: { next: redirectTo },
       })
       .select("id")
       .single();

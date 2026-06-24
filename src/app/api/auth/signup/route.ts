@@ -7,21 +7,33 @@ import {
   hashOtp,
   hashPin,
 } from "@/lib/auth/crypto";
+import { accountTypesWithSavings } from "@/lib/auth/membership-options";
 import { signupSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
+import { verifyMathChallenge } from "@/lib/security/human-check";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
     if (!parsed.success) {
+      const firstError = Object.values(parsed.error.flatten().fieldErrors)
+        .flat()
+        .find(Boolean);
       return NextResponse.json(
-        { error: parsed.error.flatten().fieldErrors },
+        { error: firstError ?? "Invalid application." },
         { status: 400 }
       );
     }
 
     const data = parsed.data;
+
+    if (!verifyMathChallenge(data.humanCheckToken, data.humanCheckAnswer)) {
+      return NextResponse.json(
+        { error: "Incorrect verification answer. Please try again." },
+        { status: 400 }
+      );
+    }
     const admin = createAdminClient();
     const normalizedUsername = data.username.toLowerCase();
     const normalizedEmail = data.email.toLowerCase().trim();
@@ -56,7 +68,9 @@ export async function POST(request: Request) {
         pin_hash: hashPin(data.pin),
         internal_auth_secret: encryptSensitive(internalSecret),
         eligibility_category: data.eligibilityCategory,
-        requested_account_types: data.requestedAccountTypes,
+        requested_account_types: accountTypesWithSavings(
+          data.requestedAccountType
+        ),
         expires_at: expiresAt,
       },
       { onConflict: "email" }

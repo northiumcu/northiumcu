@@ -115,6 +115,7 @@ export default function MembershipPage() {
         description="Open your account today and become a member-owner of Northium Credit Union."
         primaryLabel="Apply Now"
         primaryHref="/apply"
+        visual="application"
       />
     </PublicLayout>
   );

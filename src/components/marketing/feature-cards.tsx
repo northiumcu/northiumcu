@@ -20,7 +20,7 @@ export function FeatureCards() {
             </p>
             <div className="mt-8 overflow-hidden rounded-2xl border border-northium-border shadow-lg">
               <BankingImage
-                visual="community"
+                visual="collaboration"
                 className="aspect-[4/3] w-full"
                 sizes="(max-width: 1024px) 100vw, 35vw"
               />

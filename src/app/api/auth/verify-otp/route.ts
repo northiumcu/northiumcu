@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSensitive, verifyOtp } from "@/lib/auth/crypto";
+import { resolvePostLoginPath } from "@/lib/auth/admin-paths";
 import { otpVerifySchema } from "@/lib/auth/validators";
 
 export async function POST(request: Request) {
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
     if (challenge.purpose === "login" && challenge.profile_id) {
       const { data: profile, error: profileError } = await admin
         .from("profiles")
-        .select("email, internal_auth_secret")
+        .select("email, internal_auth_secret, staff_role")
         .eq("id", challenge.profile_id)
         .single();
 
@@ -196,12 +197,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: signInError.message }, { status: 500 });
       }
 
-      const next =
-        (challenge.metadata as { next?: string })?.next ?? "/member";
+      const rawNext = (challenge.metadata as { next?: string })?.next;
+      const isStaff = profile.staff_role !== "member";
+      const redirectTo = resolvePostLoginPath(rawNext, isStaff);
 
       return NextResponse.json({
         verified: true,
-        redirectTo: next,
+        redirectTo,
       });
     }
 

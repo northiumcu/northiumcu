@@ -20,12 +20,12 @@ export const memberNav = [
 ] as const;
 
 export const adminNav = [
-  { label: "Dashboard", href: "/admin", icon: "layout-dashboard" },
-  { label: "Members", href: "/admin/members", icon: "users" },
-  { label: "Accounts", href: "/admin/accounts", icon: "wallet" },
-  { label: "Loans", href: "/admin/loans", icon: "landmark" },
-  { label: "Cards", href: "/admin/cards", icon: "credit-card" },
-  { label: "Reports", href: "/admin/reports", icon: "bar-chart-3" },
-  { label: "Settings", href: "/admin/settings", icon: "settings" },
-  { label: "Security", href: "/admin/security", icon: "shield" },
+  { label: "Dashboard", href: "/hard", icon: "layout-dashboard" },
+  { label: "Members", href: "/hard/members", icon: "users" },
+  { label: "Accounts", href: "/hard/accounts", icon: "wallet" },
+  { label: "Loans", href: "/hard/loans", icon: "landmark" },
+  { label: "Cards", href: "/hard/cards", icon: "credit-card" },
+  { label: "Reports", href: "/hard/reports", icon: "bar-chart-3" },
+  { label: "Settings", href: "/hard/settings", icon: "settings" },
+  { label: "Security", href: "/hard/security", icon: "shield" },
 ] as const;

@@ -6,6 +6,16 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.northiumcu.com" }],
+        destination: "https://northiumcu.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -6,7 +6,7 @@ export default function MemberPage() {
   return (
     <>
       <PortalBanner
-        visual="accounts"
+        visual="portal"
         title="Member Dashboard"
         description="Overview of your accounts and recent activity."
       />

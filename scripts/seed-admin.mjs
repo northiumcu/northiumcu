@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 /**
- * Seeds Northium test admin and member accounts.
+ * Creates or updates the Northium super-admin account.
  *
- * Requires: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Optional env overrides:
- *   TEST_ADMIN_USERNAME, TEST_ADMIN_EMAIL, TEST_ADMIN_PIN
- *   TEST_MEMBER_USERNAME, TEST_MEMBER_EMAIL, TEST_MEMBER_PIN
+ * Requires: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AUTH_ENCRYPTION_KEY
  */
 import { createClient } from "@supabase/supabase-js";
 import {
   createCipheriv,
-  createDecipheriv,
   randomBytes,
+  randomInt,
   scryptSync,
 } from "node:crypto";
 
@@ -27,31 +24,25 @@ const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const config = {
-  admin: {
-    username: process.env.TEST_ADMIN_USERNAME ?? "northium.admin",
-    email: process.env.TEST_ADMIN_EMAIL ?? "admin@test.northiumcu.com",
-    pin: process.env.TEST_ADMIN_PIN ?? "123456",
-    firstName: "Northium",
-    lastName: "Administrator",
-    staffRole: "super_administrator",
-  },
-  member: {
-    username: process.env.TEST_MEMBER_USERNAME ?? "northium.member",
-    email: process.env.TEST_MEMBER_EMAIL ?? "member@test.northiumcu.com",
-    pin: process.env.TEST_MEMBER_PIN ?? "654321",
-    firstName: "Test",
-    lastName: "Member",
-    staffRole: "member",
-  },
+const ADMIN = {
+  username: "northium.admin",
+  email: "northiumcc@gmail.com",
+  firstName: "Northium",
+  lastName: "Administrator",
+  staffRole: "super_administrator",
 };
+
+function generatePin() {
+  return String(randomInt(100000, 1000000));
+}
 
 function getEncryptionKey() {
   const raw = process.env.AUTH_ENCRYPTION_KEY;
-  if (raw && raw.length >= 32) {
-    return scryptSync(raw, "northium-auth", 32);
+  if (!raw || raw.length < 32) {
+    console.error("AUTH_ENCRYPTION_KEY must be set (32+ chars).");
+    process.exit(1);
   }
-  return scryptSync("northium-dev-only-key", "northium-salt", 32);
+  return scryptSync(raw, "northium-auth", 32);
 }
 
 function encryptSensitive(value) {
@@ -72,23 +63,24 @@ function hashPin(pin) {
   return `${salt}:${hash}`;
 }
 
-async function upsertUser({
-  username,
-  email,
-  pin,
-  firstName,
-  lastName,
-  staffRole,
-}) {
+async function upsertAdmin({ username, email, pin, firstName, lastName, staffRole }) {
   const internalSecret = randomBytes(32).toString("hex");
-  const { data: existing } = await admin
+  const { data: existingByEmail } = await admin
+    .from("profiles")
+    .select("id, username")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+
+  const { data: existingByUsername } = await admin
     .from("profiles")
     .select("id")
     .ilike("username", username)
     .maybeSingle();
 
-  if (existing?.id) {
-    await admin.auth.admin.updateUserById(existing.id, {
+  const existingId = existingByEmail?.id ?? existingByUsername?.id;
+
+  if (existingId) {
+    await admin.auth.admin.updateUserById(existingId, {
       email,
       password: internalSecret,
       email_confirm: true,
@@ -97,16 +89,17 @@ async function upsertUser({
       .from("profiles")
       .update({
         username: username.toLowerCase(),
+        email: email.toLowerCase(),
         pin_hash: hashPin(pin),
         internal_auth_secret: encryptSensitive(internalSecret),
         staff_role: staffRole,
         email_verified_at: new Date().toISOString(),
         first_name: firstName,
         last_name: lastName,
-        member_status: staffRole === "member" ? "applicant" : "active",
+        member_status: "active",
       })
-      .eq("id", existing.id);
-    return { id: existing.id, email, username, pin, updated: true };
+      .eq("id", existingId);
+    return { id: existingId, updated: true };
   }
 
   const { data: created, error } = await admin.auth.admin.createUser({
@@ -117,42 +110,39 @@ async function upsertUser({
   });
 
   if (error || !created.user) {
-    throw new Error(error?.message ?? `Failed to create ${username}`);
+    throw new Error(error?.message ?? "Failed to create admin user.");
   }
 
   await admin
     .from("profiles")
     .update({
       username: username.toLowerCase(),
+      email: email.toLowerCase(),
       pin_hash: hashPin(pin),
       internal_auth_secret: encryptSensitive(internalSecret),
       staff_role: staffRole,
       email_verified_at: new Date().toISOString(),
       first_name: firstName,
       last_name: lastName,
-      member_status: staffRole === "member" ? "applicant" : "active",
+      member_status: "active",
     })
     .eq("id", created.user.id);
 
-  return { id: created.user.id, email, username, pin, updated: false };
+  return { id: created.user.id, updated: false };
 }
 
 try {
-  const adminUser = await upsertUser(config.admin);
-  const memberUser = await upsertUser(config.member);
+  const pin = generatePin();
+  const result = await upsertAdmin({ ...ADMIN, pin });
 
-  console.log("Northium test users ready:\n");
-  console.log("ADMIN");
-  console.log(`  Username: ${adminUser.username}`);
-  console.log(`  Email:    ${adminUser.email}`);
-  console.log(`  PIN:      ${adminUser.pin}`);
-  console.log("");
-  console.log("MEMBER (KYC pending until admin approves in /admin/members)");
-  console.log(`  Username: ${memberUser.username}`);
-  console.log(`  Email:    ${memberUser.email}`);
-  console.log(`  PIN:      ${memberUser.pin}`);
-  console.log("");
-  console.log("OTP codes print to server console when RESEND_API_KEY is unset.");
+  console.log("Northium admin account ready:\n");
+  console.log(`  Sign-in URL:  https://northiumcu.com/sign-in`);
+  console.log(`  Username:     ${ADMIN.username}`);
+  console.log(`  Email:        ${ADMIN.email}`);
+  console.log(`  Account PIN:  ${pin}`);
+  console.log(`  Role:         ${ADMIN.staffRole}`);
+  console.log(`  Status:       ${result.updated ? "updated" : "created"}`);
+  console.log("\nSign in with username + 6-digit PIN. Change your PIN after first login.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);

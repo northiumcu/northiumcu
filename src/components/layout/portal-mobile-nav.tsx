@@ -26,7 +26,7 @@ export function PortalMobileNav({
       (item) =>
         pathname === item.href ||
         (item.href !== "/member" &&
-          item.href !== "/admin" &&
+          item.href !== "/hard" &&
           pathname.startsWith(item.href))
     ) ?? nav[0]!;
 
@@ -70,7 +70,7 @@ export function PortalMobileNav({
                 const isActive =
                   pathname === item.href ||
                   (item.href !== "/member" &&
-                    item.href !== "/admin" &&
+                    item.href !== "/hard" &&
                     pathname.startsWith(item.href));
                 return (
                   <Link

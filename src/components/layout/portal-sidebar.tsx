@@ -59,7 +59,7 @@ export function PortalSidebar({
           const isActive =
             pathname === item.href ||
             (item.href !== "/member" &&
-              item.href !== "/admin" &&
+              item.href !== "/hard" &&
               pathname.startsWith(item.href));
           return (
             <Link

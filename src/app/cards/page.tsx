@@ -47,6 +47,7 @@ export default function CardsPage() {
         primaryHref="/apply"
         secondaryLabel="Member Sign In"
         secondaryHref="/sign-in"
+        visual="application"
       />
     </PublicLayout>
   );

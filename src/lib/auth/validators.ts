@@ -27,6 +27,36 @@ export const accountTypeSchema = z.enum([
   "retirement",
 ]);
 
+export const primaryAccountTypeSchema = z.enum([
+  "checking",
+  "certificate",
+  "youth",
+  "business",
+  "retirement",
+]);
+
+export const humanCheckSchema = z.object({
+  humanCheckToken: z.string().min(1, "Complete the verification question."),
+  humanCheckAnswer: z.coerce
+    .number()
+    .int("Enter a whole number.")
+    .min(2)
+    .max(18),
+});
+
+export const contactSchema = z.object({
+  name: z.string().trim().min(1, "Enter your name.").max(120),
+  email: z.string().email("Enter a valid email address."),
+  topic: z.enum(["general", "account", "membership", "loans", "security"]),
+  message: z
+    .string()
+    .trim()
+    .min(10, "Message must be at least 10 characters.")
+    .max(5000),
+  humanCheckToken: humanCheckSchema.shape.humanCheckToken,
+  humanCheckAnswer: humanCheckSchema.shape.humanCheckAnswer,
+});
+
 export const signupSchema = z
   .object({
     username: usernameSchema,
@@ -37,9 +67,9 @@ export const signupSchema = z
     pin: pinSchema,
     confirmPin: pinSchema,
     eligibilityCategory: z.string().min(1).max(120),
-    requestedAccountTypes: z
-      .array(accountTypeSchema)
-      .min(1, "Select at least one account type."),
+    requestedAccountType: primaryAccountTypeSchema,
+    humanCheckToken: humanCheckSchema.shape.humanCheckToken,
+    humanCheckAnswer: humanCheckSchema.shape.humanCheckAnswer,
   })
   .refine((data) => data.pin === data.confirmPin, {
     message: "PINs do not match.",
@@ -67,6 +97,8 @@ export const kycSubmitSchema = z
 export const loginSchema = z.object({
   username: usernameSchema,
   pin: pinSchema,
+  next: z.string().optional(),
+  portal: z.enum(["member", "admin"]).optional(),
 });
 
 export const otpVerifySchema = z.object({
@@ -98,6 +130,7 @@ export const transferCreateSchema = z.object({
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
+export type ContactInput = z.infer<typeof contactSchema>;
 export type KycSubmitInput = z.infer<typeof kycSubmitSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type TransferCreateInput = z.infer<typeof transferCreateSchema>;

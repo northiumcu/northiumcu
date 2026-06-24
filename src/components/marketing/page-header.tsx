@@ -29,17 +29,8 @@ export function PageHeader({
         isDark ? "bg-northium-primary" : "bg-northium-surface"
       )}
     >
-      {visual && (
-        <BankingImage
-          visual={visual}
-          overlay="light"
-          className="absolute inset-0 opacity-20"
-          sizes="100vw"
-          imageClassName="object-cover"
-        />
-      )}
       {!isDark && (
-        <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-northium-surface/95 to-northium-surface" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white via-northium-surface/80 to-northium-surface" />
       )}
       <Container className="relative py-12 sm:py-16 lg:py-20">
         <div

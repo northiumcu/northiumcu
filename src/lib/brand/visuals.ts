@@ -1,5 +1,5 @@
 /**
- * Page visual keys — mapped to photography in src/lib/brand/images.ts
+ * Page visual keys — mapped to unique photography in src/lib/brand/images.ts
  */
 
 export type VisualKey =
@@ -12,7 +12,10 @@ export type VisualKey =
   | "security"
   | "membership"
   | "community"
-  | "portal";
+  | "portal"
+  | "support"
+  | "collaboration"
+  | "application";
 
 export const pageVisuals: Record<string, VisualKey> = {
   "/": "hero",
@@ -22,7 +25,7 @@ export const pageVisuals: Record<string, VisualKey> = {
   "/loans": "lending",
   "/cards": "cards",
   "/security": "security",
-  "/contact": "community",
-  "/apply": "membership",
+  "/contact": "support",
+  "/apply": "application",
   "/sign-in": "portal",
 };

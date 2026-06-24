@@ -44,7 +44,7 @@ export function SecuritySection() {
           <div className="order-1 lg:order-2">
             <div className="overflow-hidden rounded-3xl border border-white/15 shadow-2xl">
               <BankingImage
-                visual="security"
+                visual="portal"
                 className="aspect-[4/5] w-full sm:aspect-square"
                 sizes="(max-width: 1024px) 100vw, 40vw"
               />

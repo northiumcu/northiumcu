@@ -8,6 +8,23 @@ export const ELIGIBILITY_OPTIONS = [
   "Community organization member",
 ] as const;
 
+/** Primary account choices in signup — savings is always included automatically. */
+export const PRIMARY_MEMBERSHIP_ACCOUNT_OPTIONS: {
+  value: AccountType;
+  label: string;
+}[] = [
+  { value: "checking", label: "Checking" },
+  { value: "certificate", label: "Share Certificate" },
+  { value: "youth", label: "Youth Account" },
+  { value: "business", label: "Business" },
+  { value: "retirement", label: "Retirement (IRA)" },
+];
+
+export function accountTypesWithSavings(primary: AccountType): AccountType[] {
+  if (primary === "savings") return ["savings"];
+  return [primary, "savings"];
+}
+
 export const MEMBERSHIP_ACCOUNT_OPTIONS: {
   value: AccountType;
   label: string;
