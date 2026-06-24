@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Inter, Inter_Tight } from "next/font/google";
 import { institution } from "@/lib/institution";
 import { ROBOTS_META_CONTENT } from "@/lib/security/crawl-block";
-import "@/lib/env";
+import { assertProductionEnv } from "@/lib/env";
 import "./globals.css";
+
+assertProductionEnv();
 
 const inter = Inter({
   variable: "--font-inter",
@@ -25,6 +27,7 @@ export const metadata: Metadata = {
   },
   description:
     "Secure accounts, lending solutions and member-first banking for individuals and families.",
+  themeColor: "#081827",
   robots: {
     index: false,
     follow: false,

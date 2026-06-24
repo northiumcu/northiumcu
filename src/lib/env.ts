@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Environment validation — Phase 4 Foundation
- * Required vars are enforced in production; optional in development for clean local compile.
+ * Middleware reads process.env directly (no throw). Full validation is lazy for server routes.
  */
 
 function optionalString() {
@@ -68,10 +68,26 @@ function validateEnv(): Env {
   return env;
 }
 
-export const env = validateEnv();
+let cachedEnv: Env | undefined;
 
+/** Lazy validation — safe for middleware; do not call at module load time. */
+export function getEnv(): Env {
+  if (!cachedEnv) {
+    cachedEnv = validateEnv();
+  }
+  return cachedEnv;
+}
+
+/** Edge-safe: never throws during middleware module initialization. */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    env.NEXT_PUBLIC_SUPABASE_URL && env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  return Boolean(url && key);
+}
+
+/** Server-only startup check (layout, API routes). */
+export function assertProductionEnv(): void {
+  if (process.env.NODE_ENV === "production") {
+    getEnv();
+  }
 }

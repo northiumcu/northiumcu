@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" role="img" aria-label="Northium">
+  <rect width="36" height="36" rx="8" fill="#D4A64A" />
+  <text
+    x="18"
+    y="25"
+    text-anchor="middle"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="18"
+    font-weight="800"
+    fill="#081827"
+  >
+    N
+  </text>
+</svg>

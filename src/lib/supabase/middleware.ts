@@ -12,6 +12,15 @@ function withCrawlBlock(response: NextResponse): NextResponse {
 }
 
 export async function updateSession(request: NextRequest) {
+  try {
+    return await runSession(request);
+  } catch (error) {
+    console.error("middleware session error:", error);
+    return withCrawlBlock(NextResponse.next({ request }));
+  }
+}
+
+async function runSession(request: NextRequest) {
   let supabaseResponse = withCrawlBlock(NextResponse.next({ request }));
   const pathname = request.nextUrl.pathname;
 
