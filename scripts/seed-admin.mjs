@@ -85,7 +85,7 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
       password: internalSecret,
       email_confirm: true,
     });
-    await admin
+    const { error: updateError } = await admin
       .from("profiles")
       .update({
         username: username.toLowerCase(),
@@ -99,6 +99,10 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
         member_status: "active",
       })
       .eq("id", existingId);
+
+    if (updateError) {
+      throw new Error(`Failed to update admin profile: ${updateError.message}`);
+    }
     return { id: existingId, updated: true };
   }
 
@@ -113,7 +117,7 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
     throw new Error(error?.message ?? "Failed to create admin user.");
   }
 
-  await admin
+  const { error: profileError } = await admin
     .from("profiles")
     .update({
       username: username.toLowerCase(),
@@ -127,6 +131,10 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
       member_status: "active",
     })
     .eq("id", created.user.id);
+
+  if (profileError) {
+    throw new Error(`Failed to configure admin profile: ${profileError.message}`);
+  }
 
   return { id: created.user.id, updated: false };
 }

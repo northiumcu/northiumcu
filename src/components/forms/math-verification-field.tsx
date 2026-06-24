@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 type MathVerificationFieldProps = {
@@ -39,7 +38,7 @@ export function MathVerificationField({
       onQuestionChange(data.question);
       onAnswerChange("");
     } catch {
-      onQuestionChange("Unable to load verification. Try again.");
+      onQuestionChange("Unable to load. Try again.");
     } finally {
       setLoading(false);
     }
@@ -51,24 +50,11 @@ export function MathVerificationField({
     }
   }, [loadChallenge, token]);
 
+  const prompt = loading ? "Loading..." : question;
+
   return (
-    <div className="space-y-2">
-      <Label htmlFor="humanCheckAnswer">Human verification</Label>
-      <div className="flex items-center gap-2">
-        <p className="min-w-0 flex-1 text-sm text-northium-muted">
-          {loading ? "Loading..." : question}
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          onClick={() => void loadChallenge()}
-          disabled={disabled || loading}
-          aria-label="New verification question"
-        >
-          <RefreshCw className="size-4" />
-        </Button>
-      </div>
+    <div className="flex flex-nowrap items-center gap-2 sm:gap-3">
+      <p className="shrink-0 text-sm text-northium-muted">{prompt}</p>
       <Input
         id="humanCheckAnswer"
         type="number"
@@ -77,11 +63,23 @@ export function MathVerificationField({
         max={18}
         value={answer}
         onChange={(e) => onAnswerChange(e.target.value)}
-        className="rounded-xl"
-        placeholder="Your answer"
+        className="h-10 w-[4.5rem] shrink-0 rounded-xl px-2 text-center sm:w-20"
+        placeholder="="
         required
         disabled={disabled || loading || !token}
+        aria-label={loading ? "Verification answer" : `Answer for ${question}`}
       />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        className="shrink-0"
+        onClick={() => void loadChallenge()}
+        disabled={disabled || loading}
+        aria-label="New verification question"
+      >
+        <RefreshCw className="size-4" />
+      </Button>
     </div>
   );
 }
