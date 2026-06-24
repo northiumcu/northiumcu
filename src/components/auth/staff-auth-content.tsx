@@ -43,7 +43,13 @@ export default function StaffAuthContent() {
     setLoading(false);
 
     if (!response.ok) {
-      setError(typeof data.error === "string" ? data.error : "Sign in failed.");
+      const message =
+        typeof data.error === "string"
+          ? data.error
+          : Array.isArray(data.error)
+            ? data.error.join(", ")
+            : "Sign in failed. Check username and 6-digit PIN.";
+      setError(message);
       return;
     }
 

@@ -22,5 +22,10 @@ This code expires in 10 minutes. If you did not request this, contact ${institut
 ${institution.name}
 ${institution.tagline}`;
 
-  await sendResendEmail({ to, subject, text: body });
+  try {
+    await sendResendEmail({ to, subject, text: body });
+  } catch (error) {
+    console.error("[Northium OTP] Email delivery failed:", error);
+    console.info(`[Northium OTP] ${purpose} → ${to}: ${code}`);
+  }
 }

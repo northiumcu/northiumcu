@@ -12,8 +12,11 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
+      const firstError = Object.values(parsed.error.flatten().fieldErrors)
+        .flat()
+        .find(Boolean);
       return NextResponse.json(
-        { error: parsed.error.flatten().fieldErrors },
+        { error: firstError ?? "Invalid sign-in details." },
         { status: 400 }
       );
     }
@@ -82,11 +85,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: otpError?.message }, { status: 500 });
     }
 
-    await sendOtpEmail({
-      to: profile.email,
-      code: otp,
-      purpose: "login",
-    });
+    try {
+      await sendOtpEmail({
+        to: profile.email,
+        code: otp,
+        purpose: "login",
+      });
+    } catch (error) {
+      console.error("[Northium login] OTP email error:", error);
+      console.info(`[Northium OTP] login → ${profile.email}: ${otp}`);
+    }
 
     return NextResponse.json({
       challengeId: challenge.id,
