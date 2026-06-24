@@ -136,7 +136,7 @@ try {
   const result = await upsertAdmin({ ...ADMIN, pin });
 
   console.log("Northium admin account ready:\n");
-  console.log(`  Sign-in URL:  https://northiumcu.com/sign-in`);
+  console.log(`  Sign-in URL:  https://northiumcu.com/hard/auth`);
   console.log(`  Username:     ${ADMIN.username}`);
   console.log(`  Email:        ${ADMIN.email}`);
   console.log(`  Account PIN:  ${pin}`);
