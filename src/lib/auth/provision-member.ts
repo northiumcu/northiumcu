@@ -125,6 +125,7 @@ export async function provisionApprovedMember(
       await sendWelcomeMemberEmail({
         to: normalizedEmail,
         firstName: input.firstName,
+        username: normalizedUsername,
       });
     } catch {
       // Member is fully provisioned even if welcome email fails.

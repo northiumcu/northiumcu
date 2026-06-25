@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shield } from "lucide-react";
 import { PublicLayout } from "@/components/layout/public-layout";
 import { Button } from "@/components/ui/button";
@@ -14,15 +14,22 @@ import { BankingImage } from "@/components/marketing/banking-image";
 import { OtpVerificationForm } from "@/components/auth/otp-verification-form";
 import { PinInput } from "@/components/forms/pin-input";
 
-type SignInView = "login" | "forgot-request" | "forgot-reset";
+type SignInView =
+  | "login"
+  | "forgot-choice"
+  | "forgot-username"
+  | "forgot-pin"
+  | "forgot-reset";
 
 export default function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? undefined;
+  const recover = searchParams.get("recover");
 
   const [view, setView] = useState<SignInView>("login");
   const [username, setUsername] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -35,6 +42,12 @@ export default function SignInContent() {
   const [resetCode, setResetCode] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+
+  useEffect(() => {
+    if (recover === "1" || recover === "true") {
+      setView("forgot-choice");
+    }
+  }, [recover]);
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
@@ -60,7 +73,33 @@ export default function SignInContent() {
     setEmailLabel(data.email);
   }
 
-  async function handleForgotRequest(event: React.FormEvent) {
+  async function handleForgotUsername(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const response = await fetch("/api/auth/forgot-username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: recoveryEmail }),
+    });
+    const data = await response.json();
+    setLoading(false);
+
+    if (!response.ok) {
+      setError(typeof data.error === "string" ? data.error : "Request failed.");
+      return;
+    }
+
+    setSuccess(
+      typeof data.message === "string"
+        ? data.message
+        : "If an account exists for that email, we sent your username."
+    );
+  }
+
+  async function handleForgotPinRequest(event: React.FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(null);
@@ -129,13 +168,23 @@ export default function SignInContent() {
     );
   }
 
+  function backToLogin() {
+    setView("login");
+    setError(null);
+    setSuccess(null);
+  }
+
   const title = challengeId
     ? "Verify Your Sign In"
-    : view === "forgot-request"
-      ? "Forgot Account PIN"
-      : view === "forgot-reset"
-        ? "Reset Account PIN"
-        : "Member Sign In";
+    : view === "forgot-choice"
+      ? "Recover Account Access"
+      : view === "forgot-username"
+        ? "Recover Username"
+        : view === "forgot-pin"
+          ? "Reset Account PIN"
+          : view === "forgot-reset"
+            ? "Reset Account PIN"
+            : "Member Sign In";
 
   return (
     <PublicLayout>
@@ -174,6 +223,11 @@ export default function SignInContent() {
                     Email verification is required for every sign in.
                   </p>
                 )}
+                {view === "forgot-choice" && (
+                  <p className="text-sm text-northium-muted">
+                    Choose what you need help recovering.
+                  </p>
+                )}
                 {view === "forgot-reset" && (
                   <p className="text-sm text-northium-muted">
                     Enter the code sent to <strong>{forgotEmail}</strong>, then
@@ -190,11 +244,96 @@ export default function SignInContent() {
                     onChallengeIdChange={setChallengeId}
                     onSuccess={(redirectTo) => router.push(redirectTo)}
                   />
-                ) : view === "forgot-request" ? (
-                  <form onSubmit={handleForgotRequest} className="space-y-4">
+                ) : view === "forgot-choice" ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-northium-muted">
+                      Forgot your username or your 6-digit account PIN? We can
+                      help you recover access securely by email.
+                    </p>
+                    <Button
+                      type="button"
+                      className="w-full bg-northium-primary hover:bg-northium-secondary"
+                      onClick={() => {
+                        setView("forgot-username");
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                    >
+                      Recover Username
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setView("forgot-pin");
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                    >
+                      Reset Account PIN
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={backToLogin}
+                    >
+                      Back to Sign In
+                    </Button>
+                  </div>
+                ) : view === "forgot-username" ? (
+                  <form onSubmit={handleForgotUsername} className="space-y-4">
+                    <p className="text-sm text-northium-muted">
+                      Enter the email on your membership account and we&apos;ll
+                      send your username if a matching account exists.
+                    </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="recovery-email">Email Address</Label>
+                      <Input
+                        id="recovery-email"
+                        type="email"
+                        value={recoveryEmail}
+                        onChange={(e) => setRecoveryEmail(e.target.value)}
+                        className="rounded-xl"
+                        autoComplete="email"
+                        required
+                      />
+                    </div>
+                    {error && (
+                      <p className="text-sm text-red-600" role="alert">
+                        {error}
+                      </p>
+                    )}
+                    {success && (
+                      <p className="text-sm text-northium-success" role="status">
+                        {success}
+                      </p>
+                    )}
+                    <Button
+                      type="submit"
+                      disabled={loading || !recoveryEmail.trim()}
+                      className="w-full bg-northium-primary hover:bg-northium-secondary"
+                    >
+                      {loading ? "Sending..." : "Email My Username"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        setView("forgot-choice");
+                        setError(null);
+                      }}
+                    >
+                      Back
+                    </Button>
+                  </form>
+                ) : view === "forgot-pin" ? (
+                  <form onSubmit={handleForgotPinRequest} className="space-y-4">
                     <p className="text-sm text-northium-muted">
                       Enter your username and we&apos;ll email a verification code
-                      so you can set a new PIN.
+                      so you can set a new 6-digit account PIN.
                     </p>
                     <div className="space-y-2">
                       <Label htmlFor="forgot-username">Username</Label>
@@ -224,11 +363,11 @@ export default function SignInContent() {
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        setView("login");
+                        setView("forgot-choice");
                         setError(null);
                       }}
                     >
-                      Back to Sign In
+                      Back
                     </Button>
                   </form>
                 ) : view === "forgot-reset" ? (
@@ -292,7 +431,7 @@ export default function SignInContent() {
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        setView("forgot-request");
+                        setView("forgot-pin");
                         setError(null);
                         setSuccess(null);
                       }}
@@ -342,13 +481,13 @@ export default function SignInContent() {
                       <button
                         type="button"
                         onClick={() => {
-                          setView("forgot-request");
+                          setView("forgot-choice");
                           setError(null);
                           setSuccess(null);
                         }}
                         className="text-sm font-semibold text-northium-primary hover:underline"
                       >
-                        Forgot PIN?
+                        Forgot username or PIN?
                       </button>
                     </div>
                   </form>

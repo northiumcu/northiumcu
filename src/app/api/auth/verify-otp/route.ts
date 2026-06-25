@@ -268,6 +268,7 @@ export async function POST(request: Request) {
         await sendWelcomeMemberEmail({
           to: pending.email,
           firstName: pending.first_name,
+          username: pending.username,
         });
       }
 

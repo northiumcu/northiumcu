@@ -1,6 +1,13 @@
 import { institution } from "@/lib/institution";
 import { escapeHtml } from "@/lib/email/escape";
 import {
+  recipientGreetingHtml,
+  recipientGreetingText,
+  usernameDetailRow,
+  usernameTextLine,
+  type EmailRecipientContext,
+} from "@/lib/email/recipient-context";
+import {
   buildEmailLayout,
   codeBlock,
   detailRow,
@@ -10,6 +17,7 @@ export type EmailTemplateId =
   | "otp-login"
   | "otp-signup"
   | "otp-pin-reset"
+  | "username-recovery"
   | "contact-internal"
   | "contact-confirmation"
   | "welcome-member";
@@ -42,21 +50,28 @@ export const emailTemplateCatalog: EmailTemplateMeta[] = [
     name: "Sign-in verification",
     description: "Sent when a member or staff user signs in with username and PIN.",
     trigger: "POST /api/auth/login",
-    sampleData: { code: "482916", recipientName: "Member" },
+    sampleData: { code: "482916", recipientName: "Jordan", username: "jordan.lee" },
   },
   {
     id: "otp-signup",
     name: "Membership verification",
     description: "Sent during membership application before the account is created.",
     trigger: "POST /api/auth/signup",
-    sampleData: { code: "719304", recipientName: "Applicant" },
+    sampleData: { code: "719304", recipientName: "Jordan", username: "jordan.lee" },
   },
   {
     id: "otp-pin-reset",
     name: "PIN reset verification",
     description: "Sent when a member requests to reset their account PIN.",
     trigger: "POST /api/auth/forgot-pin",
-    sampleData: { code: "305184", recipientName: "Member" },
+    sampleData: { code: "305184", recipientName: "Jordan", username: "jordan.lee" },
+  },
+  {
+    id: "username-recovery",
+    name: "Username recovery",
+    description: "Sent when a member requests their username by email.",
+    trigger: "POST /api/auth/forgot-username",
+    sampleData: { recipientName: "Jordan", username: "jordan.lee" },
   },
   {
     id: "contact-internal",
@@ -89,9 +104,14 @@ export const emailTemplateCatalog: EmailTemplateMeta[] = [
   },
 ];
 
-export function buildOtpLoginEmail(code: string): EmailMessage {
+export function buildOtpLoginEmail(
+  code: string,
+  context: EmailRecipientContext = {}
+): EmailMessage {
   const subject = `${institution.shortName} sign-in verification code`;
-  const text = `Your ${institution.shortName} sign-in verification code is: ${code}
+  const text = `${recipientGreetingText(context.firstName)}
+
+Your ${institution.shortName} sign-in verification code is: ${code}${usernameTextLine(context.username)}
 
 This code expires in 10 minutes. If you did not request this, contact ${institution.supportEmail} immediately.
 
@@ -102,7 +122,11 @@ ${institution.tagline}`;
     preheader: `Your sign-in code is ${code}. It expires in 10 minutes.`,
     eyebrow: "Secure sign-in",
     title: "Verify your sign-in",
-    bodyHtml: `<p style="margin:0 0 12px">Use this one-time verification code to complete your sign-in to ${escapeHtml(institution.shortName)}.</p>
+    bodyHtml: `${recipientGreetingHtml(context.firstName)}
+      <p style="margin:0 0 12px">Use this one-time verification code to complete your sign-in to ${escapeHtml(institution.shortName)}.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px">
+        ${usernameDetailRow(context.username)}
+      </table>
       ${codeBlock(code)}
       <p style="margin:0;color:#667085">This code expires in <strong>10 minutes</strong>. For your protection, a new code is required every time you sign in.</p>`,
     footerNote: "Never share this code. Northium will never ask for it by phone or text.",
@@ -111,9 +135,14 @@ ${institution.tagline}`;
   return { subject, html, text };
 }
 
-export function buildOtpSignupEmail(code: string): EmailMessage {
+export function buildOtpSignupEmail(
+  code: string,
+  context: EmailRecipientContext = {}
+): EmailMessage {
   const subject = `${institution.shortName} membership verification code`;
-  const text = `Your ${institution.shortName} membership verification code is: ${code}
+  const text = `${recipientGreetingText(context.firstName)}
+
+Your ${institution.shortName} membership verification code is: ${code}${usernameTextLine(context.username)}
 
 This code expires in 10 minutes. If you did not apply for membership, contact ${institution.supportEmail} immediately.
 
@@ -124,7 +153,11 @@ ${institution.tagline}`;
     preheader: `Your membership verification code is ${code}.`,
     eyebrow: "Membership application",
     title: "Verify your email",
-    bodyHtml: `<p style="margin:0 0 12px">Thank you for applying to ${escapeHtml(institution.name)}. Enter this code to verify your email and continue your application.</p>
+    bodyHtml: `${recipientGreetingHtml(context.firstName)}
+      <p style="margin:0 0 12px">Thank you for applying to ${escapeHtml(institution.name)}. Enter this code to verify your email and continue your application.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px">
+        ${usernameDetailRow(context.username)}
+      </table>
       ${codeBlock(code)}
       <p style="margin:0;color:#667085">After verification you can sign in, complete identity review, and finish opening your accounts.</p>`,
     cta: { label: "Continue application", href: `${institution.productionUrl}/apply` },
@@ -134,9 +167,14 @@ ${institution.tagline}`;
   return { subject, html, text };
 }
 
-export function buildOtpPinResetEmail(code: string): EmailMessage {
+export function buildOtpPinResetEmail(
+  code: string,
+  context: EmailRecipientContext = {}
+): EmailMessage {
   const subject = `${institution.shortName} PIN reset verification code`;
-  const text = `Your ${institution.shortName} PIN reset verification code is: ${code}
+  const text = `${recipientGreetingText(context.firstName)}
+
+Your ${institution.shortName} PIN reset verification code is: ${code}${usernameTextLine(context.username)}
 
 This code expires in 10 minutes. If you did not request a PIN reset, contact ${institution.supportEmail} immediately.
 
@@ -147,11 +185,52 @@ ${institution.tagline}`;
     preheader: `Your PIN reset code is ${code}. It expires in 10 minutes.`,
     eyebrow: "Account security",
     title: "Reset your account PIN",
-    bodyHtml: `<p style="margin:0 0 12px">Use this one-time verification code to reset your Northium account PIN.</p>
+    bodyHtml: `${recipientGreetingHtml(context.firstName)}
+      <p style="margin:0 0 12px">Use this one-time verification code to reset your Northium account PIN.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px">
+        ${usernameDetailRow(context.username)}
+      </table>
       ${codeBlock(code)}
       <p style="margin:0;color:#667085">After you enter this code you can choose a new 6-digit PIN and sign in.</p>`,
     cta: { label: "Go to sign in", href: `${institution.productionUrl}/sign-in` },
     footerNote: "Never share this code. Northium will never ask for it by phone or text.",
+  });
+
+  return { subject, html, text };
+}
+
+export function buildUsernameRecoveryEmail(input: {
+  firstName: string;
+  username: string;
+}): EmailMessage {
+  const subject = `Your ${institution.shortName} username`;
+  const text = `${recipientGreetingText(input.firstName)}
+
+You requested a reminder of your Northium username.
+
+Username: ${input.username}
+
+Sign in at ${institution.productionUrl}/sign-in with this username and your 6-digit account PIN.
+
+If you forgot your PIN, choose "Forgot username or PIN?" on the sign-in page to reset it.
+
+If you did not request this, contact ${institution.supportEmail} immediately.
+
+${institution.name}
+${institution.tagline}`;
+
+  const html = buildEmailLayout({
+    preheader: `Your Northium username is ${input.username}.`,
+    eyebrow: "Account recovery",
+    title: "Your username reminder",
+    bodyHtml: `${recipientGreetingHtml(input.firstName)}
+      <p style="margin:0 0 12px">You requested a reminder of your Northium username. Use it with your 6-digit account PIN to sign in.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px">
+        ${detailRow("Username", input.username)}
+      </table>
+      <p style="margin:0;color:#667085">If you also forgot your PIN, choose <strong>Forgot username or PIN?</strong> on the sign-in page to reset it.</p>`,
+    cta: { label: "Go to sign in", href: `${institution.productionUrl}/sign-in` },
+    footerNote: "Never share your PIN or verification codes. Northium will never ask for them by phone or text.",
   });
 
   return { subject, html, text };
@@ -216,9 +295,14 @@ ${institution.name}`;
   return { subject, html, text };
 }
 
-export function buildWelcomeMemberEmail(firstName: string): EmailMessage {
+export function buildWelcomeMemberEmail(
+  firstName: string,
+  username?: string | null
+): EmailMessage {
   const subject = `Welcome to ${institution.name}`;
-  const text = `Welcome to ${institution.name}, ${firstName}!
+  const text = `Hello ${firstName},
+
+Welcome to ${institution.name}!${usernameTextLine(username)}
 
 Your email is verified. Sign in to complete identity verification and finish opening your accounts.
 
@@ -232,6 +316,9 @@ ${institution.tagline}`;
     title: `Welcome to ${institution.shortName}`,
     bodyHtml: `<p style="margin:0 0 12px">Hello ${escapeHtml(firstName)},</p>
       <p style="margin:0 0 12px">Your membership application is underway. Sign in to your secure member portal to complete identity verification and receive your account details after approval.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px">
+        ${usernameDetailRow(username)}
+      </table>
       <ul style="margin:0;padding-left:20px;color:#667085;line-height:1.8">
         <li>Sign in with your username and PIN</li>
         <li>Submit identity verification documents</li>
@@ -248,13 +335,23 @@ export function renderEmailTemplate(
   id: EmailTemplateId,
   data: Record<string, string>
 ): EmailMessage {
+  const context = {
+    firstName: data.recipientName ?? data.firstName,
+    username: data.username,
+  };
+
   switch (id) {
     case "otp-login":
-      return buildOtpLoginEmail(data.code ?? "000000");
+      return buildOtpLoginEmail(data.code ?? "000000", context);
     case "otp-signup":
-      return buildOtpSignupEmail(data.code ?? "000000");
+      return buildOtpSignupEmail(data.code ?? "000000", context);
     case "otp-pin-reset":
-      return buildOtpPinResetEmail(data.code ?? "000000");
+      return buildOtpPinResetEmail(data.code ?? "000000", context);
+    case "username-recovery":
+      return buildUsernameRecoveryEmail({
+        firstName: data.recipientName ?? data.firstName ?? "Member",
+        username: data.username ?? "member.username",
+      });
     case "contact-internal":
       return buildContactInternalEmail({
         name: data.name ?? "Member",
@@ -268,7 +365,10 @@ export function renderEmailTemplate(
         topic: data.topic ?? "general",
       });
     case "welcome-member":
-      return buildWelcomeMemberEmail(data.firstName ?? "Member");
+      return buildWelcomeMemberEmail(
+        data.firstName ?? "Member",
+        data.username
+      );
     default:
       return buildOtpLoginEmail("000000");
   }

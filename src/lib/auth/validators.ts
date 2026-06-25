@@ -223,6 +223,10 @@ export const forgotPinSchema = z.object({
   username: usernameSchema,
 });
 
+export const forgotUsernameSchema = z.object({
+  email: z.string().email("Enter a valid email address."),
+});
+
 export const resetPinSchema = z
   .object({
     challengeId: z.string().uuid(),

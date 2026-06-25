@@ -85,11 +85,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: otpError?.message }, { status: 500 });
     }
 
+    let recipient: { firstName?: string | null; username?: string | null } = {};
+
+    if (challenge.profile_id) {
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("first_name, username")
+        .eq("id", challenge.profile_id)
+        .maybeSingle();
+      recipient = {
+        firstName: profile?.first_name,
+        username: profile?.username,
+      };
+    }
+
     try {
       await sendOtpEmail({
         to: challenge.email,
         code: otp,
         purpose: "login",
+        firstName: recipient.firstName,
+        username: recipient.username,
       });
     } catch (emailError) {
       await admin.from("auth_otp_challenges").delete().eq("id", newChallenge.id);

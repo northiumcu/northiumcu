@@ -130,6 +130,8 @@ export async function POST(request: Request) {
         to: normalizedEmail,
         code: otp,
         purpose: "signup",
+        firstName: data.firstName,
+        username: normalizedUsername,
       });
     } catch (emailError) {
       await admin.from("auth_otp_challenges").delete().eq("id", challenge.id);

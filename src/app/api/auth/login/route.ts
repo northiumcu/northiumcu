@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     const { data: profile, error } = await admin
       .from("profiles")
-      .select("id, email, pin_hash, staff_role, email_verified_at, member_status")
+      .select("id, email, pin_hash, staff_role, email_verified_at, member_status, first_name, username")
       .ilike("username", normalizedUsername)
       .single();
 
@@ -92,6 +92,8 @@ export async function POST(request: Request) {
         to: profile.email,
         code: otp,
         purpose: "login",
+        firstName: profile.first_name,
+        username: profile.username,
       });
     } catch (emailError) {
       await admin.from("auth_otp_challenges").delete().eq("id", challenge.id);

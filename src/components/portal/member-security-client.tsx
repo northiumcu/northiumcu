@@ -59,16 +59,16 @@ export function MemberSecurityClient() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-northium-muted">
-              Your 6-digit account PIN is used to sign in. Reset it anytime from
-              the sign-in page if you forget it.
+              Your 6-digit account PIN is used to sign in. Recover your username
+              or reset your PIN anytime from the sign-in page.
             </p>
             <Button
               variant="outline"
               nativeButton={false}
-              render={<Link href="/sign-in" />}
+              render={<Link href="/sign-in?recover=1" />}
               className="rounded-xl border-sky-200"
             >
-              Reset Account PIN
+              Recover Username or PIN
             </Button>
           </CardContent>
         </Card>

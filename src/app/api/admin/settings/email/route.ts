@@ -98,7 +98,10 @@ export async function PATCH(request: Request) {
 
     if (testEmail) {
       const code = generateOtpCode();
-      const message = buildOtpSignupEmail(code);
+      const message = buildOtpSignupEmail(code, {
+        firstName: "Jordan",
+        username: "jordan.lee",
+      });
       await sendResendEmail({
         to: testEmail,
         subject: `[Test] ${message.subject}`,
@@ -135,7 +138,10 @@ export async function POST(request: Request) {
         : auth.profile.email;
 
     const code = generateOtpCode();
-    const message = buildOtpSignupEmail(code);
+    const message = buildOtpSignupEmail(code, {
+      firstName: "Jordan",
+      username: "jordan.lee",
+    });
 
     await sendResendEmail({
       to: testEmail,

@@ -4,11 +4,13 @@ import { sendResendEmail } from "@/lib/email/resend";
 export async function sendWelcomeMemberEmail({
   to,
   firstName,
+  username,
 }: {
   to: string;
   firstName: string;
+  username?: string | null;
 }) {
-  const message = buildWelcomeMemberEmail(firstName);
+  const message = buildWelcomeMemberEmail(firstName, username);
 
   try {
     await sendResendEmail({
