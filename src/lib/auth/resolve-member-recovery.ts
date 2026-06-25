@@ -25,12 +25,17 @@ async function resolveUsername(
     if (trimmed) return trimmed;
   }
 
-  const { data: authUser } = await admin.auth.admin.getUserById(profileId);
-  const metaUsername =
-    typeof authUser?.user?.user_metadata?.username === "string"
-      ? authUser.user.user_metadata.username.trim()
-      : "";
-  return metaUsername || null;
+  try {
+    const { data: authUser } = await admin.auth.admin.getUserById(profileId);
+    const metaUsername =
+      typeof authUser?.user?.user_metadata?.username === "string"
+        ? authUser.user.user_metadata.username.trim()
+        : "";
+    return metaUsername || null;
+  } catch (error) {
+    console.error("[Northium Recovery] Could not load auth metadata:", error);
+    return null;
+  }
 }
 
 function profileToRecoveryTarget(
@@ -142,50 +147,6 @@ export async function resolveMemberRecoveryByEmail(
       firstName: pending.first_name?.trim() || "Member",
       username: pending.username.trim(),
     };
-  }
-
-  const listUsersByEmail = admin.auth.admin.listUsers as (params?: {
-    page?: number;
-    perPage?: number;
-    filter?: string;
-  }) => ReturnType<typeof admin.auth.admin.listUsers>;
-
-  const { data: authData, error: authError } = await listUsersByEmail({
-    page: 1,
-    perPage: 5,
-    filter: normalizedEmail,
-  });
-
-  if (authError) {
-    console.error("[Northium Recovery] Auth user lookup failed:", authError.message);
-    return null;
-  }
-
-  for (const authUser of authData.users) {
-    if (!emailsMatch(authUser.email, normalizedEmail)) continue;
-
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("id, email, first_name, username, staff_role, member_status")
-      .eq("id", authUser.id)
-      .maybeSingle();
-
-    if (!profile) continue;
-
-    const username = await resolveUsername(admin, profile.id, [
-      profile.username,
-      typeof authUser.user_metadata?.username === "string"
-        ? authUser.user_metadata.username
-        : null,
-    ]);
-    if (!username) continue;
-
-    const target = profileToRecoveryTarget(
-      profile,
-      username,
-      authUser.email ?? profile.email ?? undefined
-    );
-    if (target) return target;
   }
 
   return null;
