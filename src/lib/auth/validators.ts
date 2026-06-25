@@ -14,6 +14,17 @@ export const pinSchema = z
   .string()
   .regex(/^\d{6}$/, "Account PIN must be exactly 6 digits.");
 
+export const ROUTING_NUMBER_LENGTH = 9;
+
+export const routingNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{9}$/, "Routing number must be exactly 9 digits.");
+
+export function sanitizeRoutingNumberInput(value: string): string {
+  return value.replace(/\D/g, "").slice(0, ROUTING_NUMBER_LENGTH);
+}
+
 export const ssnSchema = z
   .string()
   .regex(/^\d{3}-?\d{2}-?\d{4}$/, "Enter a valid 9-digit SSN.");
@@ -207,7 +218,7 @@ export const transferCreateSchema = z.object({
   payeeId: z.string().uuid().optional(),
   beneficiaryName: z.string().max(120).optional(),
   beneficiaryBank: z.string().max(120).optional(),
-  destinationRoutingNumber: z.string().max(20).optional(),
+  destinationRoutingNumber: routingNumberSchema.optional(),
   destinationAccountNumber: z.string().max(34).optional(),
   zelleContact: z.string().max(120).optional(),
   wireSwift: z.string().max(20).optional(),
@@ -221,10 +232,7 @@ export const transferCreateSchema = z.object({
 export const billPayPayeeSchema = z.object({
   nickname: z.string().trim().min(1).max(60),
   payeeName: z.string().trim().min(1).max(120),
-  routingNumber: z
-    .string()
-    .trim()
-    .regex(/^\d{9}$/, "Routing number must be 9 digits."),
+  routingNumber: routingNumberSchema,
   accountNumber: z
     .string()
     .trim()

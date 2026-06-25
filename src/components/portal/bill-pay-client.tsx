@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
 import type { BillPayPayeeView } from "@/lib/banking/bill-pay";
+import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
 
 interface Account {
   id: string;
@@ -467,7 +468,7 @@ export function BillPayClient() {
                       onChange={(e) =>
                         setPayeeForm((current) => ({
                           ...current,
-                          routingNumber: e.target.value.replace(/\D/g, "").slice(0, 9),
+                          routingNumber: sanitizeRoutingNumberInput(e.target.value),
                         }))
                       }
                       className="rounded-xl"
