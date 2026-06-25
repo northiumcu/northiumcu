@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { StaffPasswordForm } from "@/components/auth/staff-password-form";
 import { institution } from "@/lib/institution";
 
 export default function AdminSettingsPage() {
@@ -12,9 +13,25 @@ export default function AdminSettingsPage() {
           Institution Settings
         </h1>
         <p className="mt-1 text-northium-muted">
-          Configure institution-wide settings and preferences.
+          Configure institution-wide settings and staff account security.
         </p>
       </div>
+
+      <Card className="rounded-2xl border-northium-border">
+        <CardHeader>
+          <CardTitle className="font-heading text-lg text-northium-primary">
+            Staff password
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-northium-muted">
+            Change your staff console password after first sign-in. Use a unique
+            password you do not reuse elsewhere.
+          </p>
+          <StaffPasswordForm />
+        </CardContent>
+      </Card>
+
       <Card className="rounded-2xl border-northium-border">
         <CardHeader>
           <CardTitle className="font-heading text-lg text-northium-primary">

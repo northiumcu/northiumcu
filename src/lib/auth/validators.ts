@@ -98,8 +98,33 @@ export const loginSchema = z.object({
   username: usernameSchema,
   pin: pinSchema,
   next: z.string().optional(),
-  portal: z.enum(["member", "admin"]).optional(),
 });
+
+export const staffPasswordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters.")
+  .max(128, "Password must be at most 128 characters.")
+  .regex(/[A-Z]/, "Include at least one uppercase letter.")
+  .regex(/[a-z]/, "Include at least one lowercase letter.")
+  .regex(/\d/, "Include at least one number.")
+  .regex(/[^A-Za-z0-9]/, "Include at least one symbol.");
+
+export const staffLoginSchema = z.object({
+  email: z.string().email("Enter a valid email address."),
+  password: z.string().min(1, "Enter your password."),
+  next: z.string().optional(),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password."),
+    newPassword: staffPasswordSchema,
+    confirmPassword: z.string().min(1, "Confirm your new password."),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match.",
+    path: ["confirmPassword"],
+  });
 
 export const otpVerifySchema = z.object({
   challengeId: z.string().uuid(),

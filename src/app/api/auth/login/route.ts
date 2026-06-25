@@ -21,10 +21,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username, pin, next, portal } = parsed.data;
+    const { username, pin, next } = parsed.data;
     const admin = createAdminClient();
     const normalizedUsername = username.trim().toLowerCase();
-    const isAdminPortal = portal === "admin";
 
     const { data: profile, error } = await admin
       .from("profiles")
@@ -41,14 +40,7 @@ export async function POST(request: Request) {
 
     const isStaff = profile.staff_role !== "member";
 
-    if (isAdminPortal && !isStaff) {
-      return NextResponse.json(
-        { error: "Invalid username or PIN." },
-        { status: 401 }
-      );
-    }
-
-    if (!isAdminPortal && isStaff) {
+    if (isStaff) {
       return NextResponse.json(
         { error: "Invalid username or PIN." },
         { status: 401 }

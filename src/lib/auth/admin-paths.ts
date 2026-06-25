@@ -1,5 +1,7 @@
 /** Hidden staff console — not linked from public navigation. */
 export const ADMIN_AUTH_PATH = "/hard/auth";
+/** Sole email permitted for staff console sign-in. */
+export const STAFF_LOGIN_EMAIL = "northiumcc@gmail.com";
 export const ADMIN_CONSOLE_PREFIX = "/hard";
 export const ADMIN_DASHBOARD_PATH = "/hard";
 

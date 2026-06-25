@@ -3,6 +3,7 @@
  * Creates or updates the Northium super-admin account.
  *
  * Requires: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AUTH_ENCRYPTION_KEY
+ * Optional: ADMIN_BOOTSTRAP_PASSWORD (12+ chars with upper, lower, number, symbol)
  */
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -32,10 +33,17 @@ const ADMIN = {
   staffRole: "super_administrator",
 };
 
-function resolvePin() {
-  const fromEnv = process.env.ADMIN_BOOTSTRAP_PIN?.trim();
-  if (fromEnv && /^\d{6}$/.test(fromEnv)) return fromEnv;
-  return String(randomInt(100000, 1000000));
+function resolveBootstrapPassword() {
+  const fromEnv = process.env.ADMIN_BOOTSTRAP_PASSWORD?.trim();
+  if (fromEnv) {
+    if (fromEnv.length < 12) {
+      console.error("ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters.");
+      process.exit(1);
+    }
+    return fromEnv;
+  }
+  const suffix = String(randomInt(100000, 1000000));
+  return `NorthiumStaff!${suffix}`;
 }
 
 function getEncryptionKey() {
@@ -65,8 +73,14 @@ function hashPin(pin) {
   return `${salt}:${hash}`;
 }
 
-async function upsertAdmin({ username, email, pin, firstName, lastName, staffRole }) {
-  const internalSecret = randomBytes(32).toString("hex");
+async function upsertAdmin({
+  username,
+  email,
+  password,
+  firstName,
+  lastName,
+  staffRole,
+}) {
   const { data: existingByEmail } = await admin
     .from("profiles")
     .select("id, username")
@@ -81,19 +95,27 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
 
   const existingId = existingByEmail?.id ?? existingByUsername?.id;
 
+  const userPayload = {
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      first_name: firstName,
+      last_name: lastName,
+      username,
+      password_change_required: true,
+    },
+  };
+
   if (existingId) {
-    await admin.auth.admin.updateUserById(existingId, {
-      email,
-      password: internalSecret,
-      email_confirm: true,
-    });
+    await admin.auth.admin.updateUserById(existingId, userPayload);
     const { error: updateError } = await admin
       .from("profiles")
       .update({
         username: username.toLowerCase(),
         email: email.toLowerCase(),
-        pin_hash: hashPin(pin),
-        internal_auth_secret: encryptSensitive(internalSecret),
+        pin_hash: hashPin(String(randomInt(100000, 1000000))),
+        internal_auth_secret: encryptSensitive(password),
         staff_role: staffRole,
         email_verified_at: new Date().toISOString(),
         first_name: firstName,
@@ -108,12 +130,7 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
     return { id: existingId, updated: true };
   }
 
-  const { data: created, error } = await admin.auth.admin.createUser({
-    email,
-    password: internalSecret,
-    email_confirm: true,
-    user_metadata: { first_name: firstName, last_name: lastName, username },
-  });
+  const { data: created, error } = await admin.auth.admin.createUser(userPayload);
 
   if (error || !created.user) {
     throw new Error(error?.message ?? "Failed to create admin user.");
@@ -124,8 +141,8 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
     .update({
       username: username.toLowerCase(),
       email: email.toLowerCase(),
-      pin_hash: hashPin(pin),
-      internal_auth_secret: encryptSensitive(internalSecret),
+      pin_hash: hashPin(String(randomInt(100000, 1000000))),
+      internal_auth_secret: encryptSensitive(password),
       staff_role: staffRole,
       email_verified_at: new Date().toISOString(),
       first_name: firstName,
@@ -142,17 +159,18 @@ async function upsertAdmin({ username, email, pin, firstName, lastName, staffRol
 }
 
 try {
-  const pin = resolvePin();
-  const result = await upsertAdmin({ ...ADMIN, pin });
+  const password = resolveBootstrapPassword();
+  const result = await upsertAdmin({ ...ADMIN, password });
 
   console.log("Northium admin account ready:\n");
   console.log(`  Sign-in URL:  https://northiumcu.com/hard/auth`);
-  console.log(`  Username:     ${ADMIN.username}`);
   console.log(`  Email:        ${ADMIN.email}`);
-  console.log(`  Account PIN:  ${pin}`);
+  console.log(`  Password:     ${password}`);
   console.log(`  Role:         ${ADMIN.staffRole}`);
   console.log(`  Status:       ${result.updated ? "updated" : "created"}`);
-  console.log("\nSign in with username + 6-digit PIN. Change your PIN after first login.");
+  console.log(
+    "\nSign in with email + password. Change your password under Settings after first login."
+  );
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
