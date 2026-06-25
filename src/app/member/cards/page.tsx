@@ -1,16 +1,14 @@
 import { MemberCardsClient } from "@/components/portal/member-cards-client";
+import { PortalPageHeader } from "@/components/layout/portal-page-header";
 
 export default function MemberCardsPage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-northium-primary">
-          Your Cards
-        </h1>
-        <p className="mt-1 text-northium-muted">
-          Northium Mastercard and card security controls.
-        </p>
-      </div>
+      <PortalPageHeader
+        visual="cards"
+        title="Your Cards"
+        description="Northium Mastercard and card security controls."
+      />
       <MemberCardsClient />
     </div>
   );

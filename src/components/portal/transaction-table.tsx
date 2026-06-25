@@ -34,39 +34,46 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
 
   if (transactions.length === 0) {
     return (
-      <div className="rounded-2xl border border-northium-border bg-white p-8 text-center text-sm text-northium-muted">
-        No transactions to display.
+      <div className="rounded-2xl border border-dashed border-northium-border/80 bg-white/70 p-8 text-center text-sm text-northium-muted backdrop-blur-sm">
+        No transactions to display yet.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-northium-border">
+    <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/80 shadow-sm backdrop-blur-sm">
       <Table>
         <TableHeader>
-          <TableRow className="bg-northium-surface hover:bg-northium-surface">
-            <TableHead className="font-semibold">Date</TableHead>
-            <TableHead className="font-semibold">Description</TableHead>
-            <TableHead className="font-semibold">Reference</TableHead>
-            <TableHead className="text-right font-semibold">Amount</TableHead>
+          <TableRow className="border-northium-border/60 bg-gradient-to-r from-northium-surface to-emerald-50/50 hover:bg-gradient-to-r hover:from-northium-surface hover:to-emerald-50/50">
+            <TableHead className="font-semibold text-northium-primary">Date</TableHead>
+            <TableHead className="font-semibold text-northium-primary">Description</TableHead>
+            <TableHead className="font-semibold text-northium-primary">Reference</TableHead>
+            <TableHead className="text-right font-semibold text-northium-primary">
+              Amount
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.map((tx) => {
             const isCredit = CREDIT_TYPES.includes(tx.type);
             return (
-              <TableRow key={tx.id}>
+              <TableRow
+                key={tx.id}
+                className="border-northium-border/50 transition-colors hover:bg-sky-50/50"
+              >
                 <TableCell className="text-northium-muted">
                   {dateFormatter.format(new Date(tx.created_at))}
                 </TableCell>
-                <TableCell className="font-medium">{tx.description}</TableCell>
+                <TableCell className="font-medium text-northium-text">
+                  {tx.description}
+                </TableCell>
                 <TableCell className="text-northium-muted">
                   {tx.reference ?? "—"}
                 </TableCell>
                 <TableCell
                   className={cn(
                     "text-right font-semibold",
-                    isCredit ? "text-northium-success" : "text-northium-text"
+                    isCredit ? "text-emerald-600" : "text-northium-primary"
                   )}
                 >
                   {isCredit ? "+" : "-"}

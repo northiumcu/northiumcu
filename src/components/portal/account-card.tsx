@@ -1,51 +1,45 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Account } from "@/types/database";
-
-const accountLabels: Record<Account["type"], string> = {
-  checking: "Checking",
-  savings: "Savings",
-  certificate: "Certificate",
-  youth: "Youth Savings",
-  business: "Business",
-  retirement: "Retirement",
-};
+import { accountTypeTheme } from "@/lib/portal/theme";
+import { cn } from "@/lib/utils";
 
 interface AccountCardProps {
   account: Pick<Account, "type" | "account_number" | "balance" | "status">;
 }
 
 export function AccountCard({ account }: AccountCardProps) {
+  const theme = accountTypeTheme[account.type];
+  const Icon = theme.icon;
   const formatted = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(account.balance);
 
   return (
-    <Card className="rounded-2xl border-northium-border shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-northium-muted">
-          {accountLabels[account.type]}
-        </CardTitle>
-        <Badge
-          variant={account.status === "active" ? "default" : "secondary"}
-          className={
-            account.status === "active"
-              ? "bg-northium-success/10 text-northium-success"
-              : ""
-          }
-        >
-          {account.status}
-        </Badge>
-      </CardHeader>
-      <CardContent>
-        <p className="font-heading text-2xl font-bold text-northium-primary">
-          {formatted}
-        </p>
-        <p className="mt-1 text-xs text-northium-muted">
-          ••••{account.account_number.slice(-4)}
-        </p>
-      </CardContent>
-    </Card>
+    <article
+      className={cn(
+        "relative overflow-hidden rounded-2xl bg-gradient-to-br p-5 text-white shadow-lg transition-transform hover:-translate-y-0.5 hover:shadow-xl",
+        theme.gradient
+      )}
+    >
+      <div className="pointer-events-none absolute -right-6 -top-8 size-28 rounded-full bg-white/15 blur-2xl" />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <p className={cn("text-sm font-medium", theme.accent)}>{theme.label}</p>
+          <p className="mt-3 font-heading text-3xl font-bold tracking-tight">{formatted}</p>
+          <p className="mt-2 text-xs text-white/75">
+            Account ••••{account.account_number.slice(-4)}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <span className="flex size-11 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+            <Icon className="size-5 text-white" />
+          </span>
+          <Badge className="border-white/20 bg-white/15 text-white hover:bg-white/15">
+            {account.status}
+          </Badge>
+        </div>
+      </div>
+    </article>
   );
 }

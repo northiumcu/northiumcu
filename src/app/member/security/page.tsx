@@ -1,4 +1,5 @@
 import { AlertsPanel } from "@/components/portal/alerts-panel";
+import { PortalPageHeader } from "@/components/layout/portal-page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,17 +24,14 @@ const devices = [
 export default function MemberSecurityPage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-bold text-northium-primary">
-          Security Center
-        </h1>
-        <p className="mt-1 text-northium-muted">
-          Manage authentication, trusted devices, and security alerts.
-        </p>
-      </div>
+      <PortalPageHeader
+        visual="security"
+        title="Security Center"
+        description="Manage authentication, trusted devices, and security alerts."
+      />
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <Card className="rounded-2xl border-northium-border">
+        <Card className="overflow-hidden rounded-2xl border-emerald-200/70 bg-gradient-to-br from-white to-emerald-50/60 shadow-sm">
           <CardHeader>
             <CardTitle className="font-heading text-lg text-northium-primary">
               Multi-Factor Authentication
@@ -45,25 +43,25 @@ export default function MemberSecurityPage() {
                 <p className="font-medium">Authenticator App</p>
                 <p className="text-sm text-northium-muted">Enabled</p>
               </div>
-              <Badge className="bg-northium-success/10 text-northium-success">
-                Active
-              </Badge>
+              <Badge className="bg-emerald-100 text-emerald-800">Active</Badge>
             </div>
-            <Button variant="outline">Manage MFA Settings</Button>
+            <Button variant="outline" className="rounded-xl border-emerald-200">
+              Manage MFA Settings
+            </Button>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-northium-border">
+        <Card className="overflow-hidden rounded-2xl border-sky-200/70 bg-gradient-to-br from-white to-sky-50/60 shadow-sm">
           <CardHeader>
             <CardTitle className="font-heading text-lg text-northium-primary">
               Password
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-sm text-northium-muted">
-              Last changed 45 days ago
-            </p>
-            <Button variant="outline">Change Password</Button>
+            <p className="mb-4 text-sm text-northium-muted">Last changed 45 days ago</p>
+            <Button variant="outline" className="rounded-xl border-sky-200">
+              Change Password
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -76,18 +74,16 @@ export default function MemberSecurityPage() {
           {devices.map((device) => (
             <div
               key={device.id}
-              className="flex items-center justify-between rounded-xl border border-northium-border bg-white p-4"
+              className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur-sm"
             >
               <div>
-                <p className="font-medium">{device.name}</p>
+                <p className="font-medium text-northium-primary">{device.name}</p>
                 <p className="text-sm text-northium-muted">
                   {device.location} · {device.lastActive}
                 </p>
               </div>
               {device.trusted && (
-                <Badge className="bg-northium-success/10 text-northium-success">
-                  Trusted
-                </Badge>
+                <Badge className="bg-emerald-100 text-emerald-800">Trusted</Badge>
               )}
             </div>
           ))}

@@ -130,7 +130,7 @@ export function MemberProfileClient() {
         </div>
       )}
 
-      <Card className="rounded-2xl border-northium-border shadow-sm">
+      <Card className="overflow-hidden rounded-2xl border-sky-200/60 bg-gradient-to-br from-white to-sky-50/40 shadow-sm">
         <CardHeader>
           <CardTitle className="font-heading text-lg text-northium-primary">
             Your Photo
@@ -187,7 +187,7 @@ export function MemberProfileClient() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl border-northium-border shadow-sm">
+      <Card className="overflow-hidden rounded-2xl border-sky-200/60 bg-gradient-to-br from-white to-sky-50/40 shadow-sm">
         <CardHeader>
           <CardTitle className="font-heading text-lg text-northium-primary">
             Personal Information

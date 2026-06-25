@@ -35,36 +35,34 @@ export function PortalMobileNav({
   const ActiveIcon = iconMap[activeItem.icon];
 
   return (
-    <div className="sticky top-0 z-40 border-b border-northium-border bg-white lg:hidden">
+    <div className="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-northium-primary to-[#0f3454] text-white shadow-md lg:hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <Link href={homeHref} className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-widest text-northium-muted">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-northium-gold/90">
             {title}
           </p>
-          <p className="truncate font-heading text-sm font-semibold text-northium-primary">
+          <p className="truncate font-heading text-sm font-semibold text-white">
             {activeItem.label}
           </p>
         </Link>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
-            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-northium-border bg-northium-surface px-3 text-sm font-medium text-northium-primary"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 text-sm font-medium text-white backdrop-blur-sm"
             aria-label={`Open ${title} menu`}
           >
             <ActiveIcon className="size-4" />
             <span className="hidden sm:inline">Menu</span>
-            <ChevronDown className="size-4 text-northium-muted" />
+            <ChevronDown className="size-4 text-white/70" />
           </SheetTrigger>
-          <SheetContent side="bottom" className="max-h-[80vh] rounded-t-3xl p-0">
-            <div className="border-b border-northium-border px-6 py-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-northium-muted">
+          <SheetContent side="bottom" className="max-h-[80vh] rounded-t-3xl border-t-0 bg-[#f7f9fb] p-0">
+            <div className="rounded-t-3xl bg-gradient-to-r from-northium-primary to-[#0f3454] px-6 py-4 text-white">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-northium-gold/90">
                 {title}
               </p>
-              <p className="font-heading text-lg font-semibold text-northium-primary">
-                Navigate
-              </p>
+              <p className="font-heading text-lg font-semibold">Navigate</p>
             </div>
             <nav
-              className="grid gap-1 p-4 sm:grid-cols-2"
+              className="grid gap-2 p-4 sm:grid-cols-2"
               aria-label={`${title} mobile navigation`}
             >
               {nav.map((item) => {
@@ -82,8 +80,8 @@ export function PortalMobileNav({
                     className={cn(
                       "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-northium-primary text-white"
-                        : "bg-northium-surface text-northium-text hover:bg-northium-primary/5"
+                        ? "bg-gradient-to-r from-northium-gold to-amber-400 text-northium-primary shadow-md"
+                        : "bg-white text-northium-text shadow-sm ring-1 ring-northium-border/80 hover:bg-northium-surface"
                     )}
                   >
                     <Icon className="size-4 shrink-0" />
@@ -99,7 +97,7 @@ export function PortalMobileNav({
                   await fetch("/api/auth/signout", { method: "POST" });
                   window.location.href = "/sign-in";
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-northium-border px-4 py-3 text-sm font-medium text-northium-primary"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-northium-border bg-white px-4 py-3 text-sm font-medium text-northium-primary shadow-sm"
               >
                 <LogOut className="size-4" />
                 Sign Out
