@@ -152,6 +152,9 @@ export const transferCreateSchema = z.object({
   wireSwift: z.string().max(20).optional(),
   wireIban: z.string().max(40).optional(),
   wireCountry: z.string().max(80).optional(),
+  cotCode: z.string().max(32).optional(),
+  imfCode: z.string().max(32).optional(),
+  pin: pinSchema,
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

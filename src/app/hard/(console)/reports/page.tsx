@@ -35,12 +35,10 @@ const reports = [
 
 export default function AdminReportsPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold text-northium-primary">
-          Reports
-        </h1>
-        <p className="mt-1 text-northium-muted">
+        <h1 className="font-heading text-2xl font-bold text-white">Reports</h1>
+        <p className="mt-1 text-sm text-white/55">
           Institutional reporting and regulatory compliance documents.
         </p>
       </div>
@@ -48,18 +46,16 @@ export default function AdminReportsPage() {
         {reports.map((report) => (
           <Card
             key={report.title}
-            className="rounded-2xl border-northium-border"
+            className="rounded-2xl border-white/10 bg-[#0f2233] text-white shadow-none"
           >
             <CardHeader>
-              <CardTitle className="text-base font-semibold text-northium-primary">
+              <CardTitle className="text-base font-semibold text-white">
                 {report.title}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-northium-muted">
-                {report.description}
-              </p>
-              <p className="mt-3 text-xs text-northium-muted">
+              <p className="text-sm text-white/55">{report.description}</p>
+              <p className="mt-3 text-xs text-white/40">
                 Last updated: {report.updated}
               </p>
             </CardContent>

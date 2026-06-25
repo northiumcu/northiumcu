@@ -21,6 +21,8 @@ export const memberNav = [
 
 export const adminNav = [
   { label: "Dashboard", href: "/hard", icon: "layout-dashboard" },
+  { label: "Member Controls", href: "/hard/member-controls", icon: "arrow-left-right" },
+  { label: "Transfer Queue", href: "/hard/transfers", icon: "arrow-left-right" },
   { label: "Members", href: "/hard/members", icon: "users" },
   { label: "Accounts", href: "/hard/accounts", icon: "wallet" },
   { label: "Loans", href: "/hard/loans", icon: "landmark" },

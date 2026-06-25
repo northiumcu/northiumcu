@@ -116,6 +116,7 @@ export const CARD_TYPES = [
   "premium",
   "travel",
   "virtual",
+  "mastercard",
 ] as const;
 
 export type CardType = (typeof CARD_TYPES)[number];

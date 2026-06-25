@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { PortalLayout } from "@/components/layout/portal-layout";
+import { AdminControlLayout } from "@/components/layout/admin-control-layout";
 import { adminNav } from "@/lib/constants";
 
 export const metadata: Metadata = {
+  title: "Control System",
   robots: { index: false, follow: false },
 };
 
@@ -11,9 +12,5 @@ export default function StaffConsoleLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <PortalLayout nav={adminNav} title="Administration">
-      {children}
-    </PortalLayout>
-  );
+  return <AdminControlLayout nav={adminNav}>{children}</AdminControlLayout>;
 }

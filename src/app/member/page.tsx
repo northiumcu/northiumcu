@@ -1,4 +1,4 @@
-import { MemberDashboard } from "@/components/portal/member-dashboard";
+import { MemberDashboardClient } from "@/components/portal/member-dashboard-client";
 import { MemberKycPanel } from "@/components/portal/member-kyc-panel";
 import { PortalBanner } from "@/components/layout/portal-banner";
 
@@ -12,7 +12,7 @@ export default function MemberPage() {
       />
       <div className="space-y-8">
         <MemberKycPanel />
-        <MemberDashboard />
+        <MemberDashboardClient />
       </div>
     </>
   );

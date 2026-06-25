@@ -1,4 +1,3 @@
-import { AlertsPanel } from "@/components/portal/alerts-panel";
 import {
   Table,
   TableBody,
@@ -49,53 +48,44 @@ const auditLogs = [
 
 export default function AdminSecurityPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold text-northium-primary">
+        <h1 className="font-heading text-2xl font-bold text-white">
           Security & Compliance
         </h1>
-        <p className="mt-1 text-northium-muted">
+        <p className="mt-1 text-sm text-white/55">
           Audit logs, risk monitoring, and security configuration.
         </p>
       </div>
 
       <div>
-        <h2 className="mb-4 font-heading text-lg font-semibold text-northium-primary">
-          Risk Alerts
-        </h2>
-        <AlertsPanel />
-      </div>
-
-      <div>
-        <h2 className="mb-4 font-heading text-lg font-semibold text-northium-primary">
+        <h2 className="mb-4 font-heading text-lg font-semibold text-white">
           Audit Log
         </h2>
-        <div className="overflow-hidden rounded-2xl border border-northium-border bg-white">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f2233]">
           <Table>
             <TableHeader>
-              <TableRow className="bg-northium-surface">
-                <TableHead>Action</TableHead>
-                <TableHead>Administrator</TableHead>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Status</TableHead>
+              <TableRow className="border-white/10 hover:bg-transparent">
+                <TableHead className="text-white/60">Action</TableHead>
+                <TableHead className="text-white/60">Administrator</TableHead>
+                <TableHead className="text-white/60">IP Address</TableHead>
+                <TableHead className="text-white/60">Timestamp</TableHead>
+                <TableHead className="text-white/60">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {auditLogs.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="border-white/10 text-white/85">
                   <TableCell className="font-mono text-sm">
                     {log.action}
                   </TableCell>
                   <TableCell>{log.actor}</TableCell>
-                  <TableCell className="font-mono text-sm text-northium-muted">
+                  <TableCell className="font-mono text-sm text-white/55">
                     {log.ip}
                   </TableCell>
-                  <TableCell className="text-northium-muted">
-                    {log.time}
-                  </TableCell>
+                  <TableCell className="text-white/55">{log.time}</TableCell>
                   <TableCell>
-                    <Badge className="bg-northium-success/10 text-northium-success">
+                    <Badge className="bg-northium-gold/15 text-northium-gold">
                       Logged
                     </Badge>
                   </TableCell>

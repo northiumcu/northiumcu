@@ -1,0 +1,545 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { CheckCircle2, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface Account {
+  id: string;
+  account_number: string;
+  type: string;
+  status: string;
+  available_balance: number;
+}
+
+const transferTypes = [
+  { value: "internal", label: "Internal Transfer" },
+  { value: "ach", label: "ACH" },
+  { value: "local_wire", label: "Local Wire Transfer" },
+  { value: "international_wire", label: "International Wire Transfer" },
+  { value: "zelle", label: "Zelle" },
+] as const;
+
+type Step = "details" | "confirm" | "pin" | "processing" | "success";
+
+export function TransferFlow() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [type, setType] = useState<string>("ach");
+  const [sourceAccountId, setSourceAccountId] = useState("");
+  const [destinationAccountId, setDestinationAccountId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [memo, setMemo] = useState("");
+  const [beneficiaryName, setBeneficiaryName] = useState("");
+  const [beneficiaryBank, setBeneficiaryBank] = useState("");
+  const [routingNumber, setRoutingNumber] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [zelleContact, setZelleContact] = useState("");
+  const [wireSwift, setWireSwift] = useState("");
+  const [wireIban, setWireIban] = useState("");
+  const [wireCountry, setWireCountry] = useState("");
+  const [cotCode, setCotCode] = useState("");
+  const [imfCode, setImfCode] = useState("");
+  const [pin, setPin] = useState("");
+  const [cotRequired, setCotRequired] = useState(false);
+  const [imfRequired, setImfRequired] = useState(false);
+  const [step, setStep] = useState<Step>("details");
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [transferId, setTransferId] = useState<string | null>(null);
+  const [pendingReview, setPendingReview] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const isZelle = type === "zelle";
+  const showConfirm = !isZelle;
+
+  useEffect(() => {
+    void fetch("/api/member/accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        const active = (data.accounts ?? []).filter(
+          (a: Account) => a.status === "active"
+        );
+        setAccounts(active);
+        if (active[0]) setSourceAccountId(active[0].id);
+        if (active[1]) setDestinationAccountId(active[1].id);
+      });
+    void fetch("/api/member/transfer-requirements")
+      .then((r) => r.json())
+      .then((data) => {
+        setCotRequired(Boolean(data.cotRequired));
+        setImfRequired(Boolean(data.imfRequired));
+      });
+  }, []);
+
+  const summary = useMemo(() => {
+    const source = accounts.find((a) => a.id === sourceAccountId);
+    return {
+      typeLabel: transferTypes.find((t) => t.value === type)?.label ?? type,
+      from: source
+        ? `${source.type} ••••${source.account_number.slice(-4)}`
+        : "—",
+      amount: Number(amount || 0),
+      beneficiary: isZelle
+        ? zelleContact
+        : beneficiaryName || "—",
+    };
+  }, [
+    accounts,
+    sourceAccountId,
+    type,
+    amount,
+    beneficiaryName,
+    zelleContact,
+    isZelle,
+  ]);
+
+  function goToPin() {
+    setError(null);
+    if (!amount || Number(amount) <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+    setStep(showConfirm ? "confirm" : "pin");
+  }
+
+  async function submitTransfer() {
+    if (pin.length !== 6) {
+      setError("Enter your 6-digit account PIN.");
+      return;
+    }
+    setError(null);
+    setStep("processing");
+    setProgress(0);
+
+    const tick = setInterval(() => {
+      setProgress((p) => Math.min(p + 8, 92));
+    }, 120);
+
+    const response = await fetch("/api/member/transfers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceAccountId,
+        destinationAccountId: type === "internal" ? destinationAccountId : undefined,
+        type,
+        amount: Number(amount),
+        memo,
+        beneficiaryName: isZelle ? zelleContact : beneficiaryName,
+        beneficiaryBank,
+        destinationRoutingNumber: routingNumber,
+        destinationAccountNumber: accountNumber,
+        zelleContact,
+        wireSwift,
+        wireIban,
+        wireCountry,
+        cotCode: cotRequired ? cotCode : undefined,
+        imfCode: imfRequired ? imfCode : undefined,
+        pin,
+      }),
+    });
+
+    clearInterval(tick);
+    setProgress(100);
+
+    const data = await response.json();
+    await new Promise((r) => setTimeout(r, 400));
+
+    if (!response.ok) {
+      setStep("pin");
+      setProgress(0);
+      setError(typeof data.error === "string" ? data.error : "Transfer failed.");
+      return;
+    }
+
+    setTransferId(data.transfer?.id ?? null);
+    setPendingReview(data.transfer?.status === "pending_approval");
+    setStatusMessage(
+      data.transfer?.member_message ?? "Transfer completed successfully."
+    );
+    setStep("success");
+    setPin("");
+  }
+
+  function resetFlow() {
+    setStep("details");
+    setProgress(0);
+    setAmount("");
+    setPin("");
+    setTransferId(null);
+    setError(null);
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <Card className="rounded-2xl border-northium-border">
+        <CardContent className="py-8 text-center text-sm text-northium-muted">
+          Transfers are available after an administrator approves your membership.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      {step === "details" && (
+        <Card className="rounded-2xl border-northium-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Transfer Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Transfer Type</Label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+              >
+                {transferTypes.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>From Account</Label>
+              <select
+                value={sourceAccountId}
+                onChange={(e) => setSourceAccountId(e.target.value)}
+                className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.type} ••••{account.account_number.slice(-4)} — $
+                    {Number(account.available_balance).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {type === "internal" && (
+              <div className="space-y-2">
+                <Label>To Account</Label>
+                <select
+                  value={destinationAccountId}
+                  onChange={(e) => setDestinationAccountId(e.target.value)}
+                  className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                >
+                  {accounts
+                    .filter((a) => a.id !== sourceAccountId)
+                    .map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.type} ••••{account.account_number.slice(-4)}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {isZelle ? (
+              <div className="space-y-2">
+                <Label>Zelle Email or Mobile</Label>
+                <Input
+                  value={zelleContact}
+                  onChange={(e) => setZelleContact(e.target.value)}
+                  placeholder="name@email.com or (555) 123-4567"
+                  className="rounded-xl"
+                  required
+                />
+              </div>
+            ) : (
+              <>
+                {type !== "internal" && (
+                  <div className="space-y-2">
+                    <Label>Receiver / Beneficiary Name</Label>
+                    <Input
+                      value={beneficiaryName}
+                      onChange={(e) => setBeneficiaryName(e.target.value)}
+                      className="rounded-xl"
+                      required
+                    />
+                  </div>
+                )}
+                {(type === "ach" || type === "local_wire") && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Routing Number</Label>
+                      <Input
+                        value={routingNumber}
+                        onChange={(e) => setRoutingNumber(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Account Number</Label>
+                      <Input
+                        value={accountNumber}
+                        onChange={(e) => setAccountNumber(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+                {type === "local_wire" && (
+                  <div className="space-y-2">
+                    <Label>Receiver Bank</Label>
+                    <Input
+                      value={beneficiaryBank}
+                      onChange={(e) => setBeneficiaryBank(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                )}
+                {type === "international_wire" && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>SWIFT / BIC</Label>
+                      <Input
+                        value={wireSwift}
+                        onChange={(e) => setWireSwift(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>IBAN</Label>
+                      <Input
+                        value={wireIban}
+                        onChange={(e) => setWireIban(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Country</Label>
+                      <Input
+                        value={wireCountry}
+                        onChange={(e) => setWireCountry(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="rounded-xl"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Memo (optional)</Label>
+              <Input
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <Button
+              type="button"
+              onClick={() => (isZelle ? setStep("pin") : goToPin())}
+              className="w-full bg-northium-primary hover:bg-northium-secondary"
+            >
+              Continue
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "confirm" && (
+        <Card className="rounded-2xl border-2 border-northium-gold/40 shadow-md">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Confirm Transfer Details
+            </CardTitle>
+            <p className="text-sm text-northium-muted">
+              Review carefully before entering your PIN.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {[
+              ["Type", summary.typeLabel],
+              ["From", summary.from],
+              ["Receiver", summary.beneficiary],
+              ["Amount", `$${summary.amount.toFixed(2)}`],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="flex justify-between border-b border-northium-border py-2"
+              >
+                <span className="text-northium-muted">{label}</span>
+                <span className="font-medium text-northium-primary">{value}</span>
+              </div>
+            ))}
+            <div className="flex gap-3 pt-4">
+              <Button variant="outline" onClick={() => setStep("details")} className="flex-1">
+                Back
+              </Button>
+              <Button
+                onClick={() => setStep("pin")}
+                className="flex-1 bg-northium-primary hover:bg-northium-secondary"
+              >
+                Confirm & Continue
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "pin" && (
+        <Card className="rounded-2xl border-northium-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Authorize with PIN
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!isZelle && (cotRequired || imfRequired) && (
+              <div className="space-y-3 rounded-xl border border-northium-border bg-northium-surface/50 p-4">
+                <p className="text-sm text-northium-muted">
+                  Security verification required. Contact your Northium account
+                  officer if you do not have your code.
+                </p>
+                {cotRequired && (
+                  <div className="space-y-2">
+                    <Label>COT Code</Label>
+                    <Input
+                      value={cotCode}
+                      onChange={(e) => setCotCode(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                )}
+                {imfRequired && (
+                  <div className="space-y-2">
+                    <Label>IMF Code</Label>
+                    <Input
+                      value={imfCode}
+                      onChange={(e) => setImfCode(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>6-Digit Account PIN</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={(e) =>
+                  setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                className="rounded-xl tracking-[0.3em]"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button
+              disabled={pin.length !== 6}
+              onClick={() => void submitTransfer()}
+              className="w-full bg-northium-primary hover:bg-northium-secondary"
+            >
+              Submit Transfer
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "processing" && (
+        <Card className="rounded-2xl border-northium-border py-12 text-center shadow-sm">
+          <CardContent className="flex flex-col items-center gap-6">
+            <div className="relative size-32">
+              <svg className="size-full -rotate-90" viewBox="0 0 120 120">
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  fill="none"
+                  stroke="#E5E7EB"
+                  strokeWidth="10"
+                />
+                <motion.circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  fill="none"
+                  stroke="#D4A64A"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                  strokeDasharray={326.7}
+                  animate={{ strokeDashoffset: 326.7 - (326.7 * progress) / 100 }}
+                  transition={{ duration: 0.2 }}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center font-heading text-2xl font-bold text-northium-primary">
+                {progress}%
+              </span>
+            </div>
+            <p className="text-sm text-northium-muted">Processing your transfer…</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "success" && (
+        <Card className="rounded-2xl border-northium-border py-10 text-center shadow-sm">
+          <CardContent className="space-y-6">
+            <CheckCircle2 className="mx-auto size-14 text-northium-success" />
+            <div>
+              <h2 className="font-heading text-xl font-bold text-northium-primary">
+                {pendingReview ? "Submitted for Review" : "Transfer Successful"}
+              </h2>
+              <p className="mt-2 text-sm text-northium-muted">{statusMessage}</p>
+            </div>
+            {transferId && !pendingReview && (
+              <Button variant="outline" nativeButton={false} render={
+                <a href={`/api/member/transfers/${transferId}/receipt`} download />
+              }>
+                <Download className="mr-2 size-4" />
+                Download PDF Receipt
+              </Button>
+            )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button
+                variant="outline"
+                onClick={resetFlow}
+                className="sm:min-w-[160px]"
+              >
+                Do Another Transfer
+              </Button>
+              <Button
+                nativeButton={false}
+                render={<Link href="/member/accounts" />}
+                className="bg-northium-primary hover:bg-northium-secondary sm:min-w-[160px]"
+              >
+                Return to Accounts
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

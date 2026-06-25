@@ -6,8 +6,6 @@ import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Container } from "@/components/layout/container";
 import {
   ADMIN_DASHBOARD_PATH,
   STAFF_LOGIN_EMAIL,
@@ -54,62 +52,62 @@ export default function StaffAuthContent() {
   }
 
   return (
-    <section className="flex min-h-[70vh] items-center border-b border-northium-border bg-northium-primary py-12 sm:py-16">
-      <Container>
-        <Card className="mx-auto w-full max-w-md rounded-2xl border-white/10 bg-white/95 shadow-2xl backdrop-blur sm:max-w-lg">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-northium-primary/5">
-              <Shield className="size-6 text-northium-primary" />
-            </div>
-            <CardTitle className="font-heading text-2xl text-northium-primary">
-              Staff access
-            </CardTitle>
-            <p className="text-sm text-northium-muted">
-              Authorized personnel only. Sign in with your staff email and
-              password.
+    <div className="flex min-h-screen items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f2233] p-8 shadow-2xl">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-northium-gold/15">
+            <Shield className="size-6 text-northium-gold" />
+          </div>
+          <h1 className="font-heading text-2xl font-bold text-white">
+            Control System
+          </h1>
+          <p className="mt-2 text-sm text-white/55">
+            Authorized personnel only. Staff email and password required.
+          </p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="staff-email" className="text-white/70">
+              Staff email
+            </Label>
+            <Input
+              id="staff-email"
+              type="email"
+              value={STAFF_LOGIN_EMAIL}
+              readOnly
+              className="rounded-xl border-white/15 bg-[#06121c] text-white"
+              autoComplete="username"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="staff-password" className="text-white/70">
+              Password
+            </Label>
+            <Input
+              id="staff-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-xl border-white/15 bg-[#06121c] text-white"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-red-300" role="alert">
+              {error}
             </p>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="staff-email">Staff email</Label>
-                <Input
-                  id="staff-email"
-                  type="email"
-                  value={STAFF_LOGIN_EMAIL}
-                  readOnly
-                  className="rounded-xl bg-northium-surface"
-                  autoComplete="username"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="staff-password">Password</Label>
-                <Input
-                  id="staff-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="rounded-xl"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-              {error && (
-                <p className="text-sm text-red-600" role="alert">
-                  {error}
-                </p>
-              )}
-              <Button
-                type="submit"
-                disabled={loading || !password}
-                className="w-full bg-northium-primary hover:bg-northium-secondary"
-              >
-                {loading ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </Container>
-    </section>
+          )}
+          <Button
+            type="submit"
+            disabled={loading || !password}
+            className="w-full bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }

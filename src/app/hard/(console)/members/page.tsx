@@ -94,58 +94,58 @@ export default function AdminMembersPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-2xl font-bold text-northium-primary">
+        <h1 className="font-heading text-2xl font-bold text-white">
           KYC & Membership Review
         </h1>
-        <p className="mt-1 text-northium-muted">
+        <p className="mt-1 text-sm text-white/55">
           Approve identity verification to issue a 12-digit account number.
         </p>
       </div>
 
       {message && (
-        <div className="rounded-xl border border-northium-border bg-northium-surface px-4 py-3 text-sm text-northium-primary">
+        <div className="rounded-xl border border-northium-gold/30 bg-northium-gold/10 px-4 py-3 text-sm text-northium-gold">
           {message}
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-northium-border bg-white">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f2233]">
         <Table>
           <TableHeader>
-            <TableRow className="bg-northium-surface">
-              <TableHead>Member</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Accounts</TableHead>
-              <TableHead>KYC</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+            <TableRow className="border-white/10 hover:bg-transparent">
+              <TableHead className="text-white/60">Member</TableHead>
+              <TableHead className="text-white/60">Email</TableHead>
+              <TableHead className="text-white/60">Accounts</TableHead>
+              <TableHead className="text-white/60">KYC</TableHead>
+              <TableHead className="text-white/60">Status</TableHead>
+              <TableHead className="text-right text-white/60">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-northium-muted">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-white/50">
                   Loading applications...
                 </TableCell>
               </TableRow>
             ) : applications.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-northium-muted">
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-white/50">
                   No pending applications.
                 </TableCell>
               </TableRow>
             ) : (
               applications.map((app) => (
-                <TableRow key={app.id}>
+                <TableRow key={app.id} className="border-white/10 text-white/85">
                   <TableCell className="font-medium">
                     {app.first_name} {app.last_name}
                   </TableCell>
-                  <TableCell className="text-northium-muted">{app.email}</TableCell>
-                  <TableCell className="text-xs capitalize text-northium-muted">
+                  <TableCell className="text-white/60">{app.email}</TableCell>
+                  <TableCell className="text-xs capitalize text-white/60">
                     {(app.requested_account_types ?? ["checking"]).join(", ")}
                   </TableCell>
-                  <TableCell className="max-w-xs text-xs text-northium-muted">
+                  <TableCell className="max-w-xs text-xs text-white/60">
                     {formatKyc(app)}
                   </TableCell>
                   <TableCell>
@@ -157,7 +157,7 @@ export default function AdminMembersPage() {
                     <div className="flex justify-end gap-2">
                       <Button
                         size="sm"
-                        className="bg-northium-primary hover:bg-northium-secondary"
+                        className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
                         onClick={() => void approve(app.id)}
                       >
                         Approve
@@ -165,6 +165,7 @@ export default function AdminMembersPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="border-white/20 bg-transparent text-white hover:bg-white/5"
                         onClick={() => void reject(app.id)}
                       >
                         Reject

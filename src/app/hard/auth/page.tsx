@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { PublicLayout } from "@/components/layout/public-layout";
 import StaffAuthContent from "@/components/auth/staff-auth-content";
 
 export const metadata: Metadata = {
@@ -10,10 +9,10 @@ export const metadata: Metadata = {
 
 export default function StaffAuthPage() {
   return (
-    <PublicLayout>
+    <div className="min-h-screen bg-[#06121c]">
       <Suspense>
         <StaffAuthContent />
       </Suspense>
-    </PublicLayout>
+    </div>
   );
 }

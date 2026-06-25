@@ -23,6 +23,12 @@ export interface Profile {
   member_number: string | null;
   member_status: MemberStatus;
   staff_role: StaffRole;
+  employer_company_name?: string | null;
+  address_state?: string | null;
+  delay_transactions?: boolean;
+  avatar_url?: string | null;
+  cot_required?: boolean;
+  imf_required?: boolean;
   created_at: string;
   updated_at: string;
 }
