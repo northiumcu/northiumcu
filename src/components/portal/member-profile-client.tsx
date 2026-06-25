@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { compressImageToWebpDataUrl } from "@/lib/images/compress-avatar";
 
 interface Profile {
   first_name: string;
@@ -24,7 +25,10 @@ export function MemberProfileClient() {
   const [paused, setPaused] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadProfile = useCallback(async () => {
@@ -45,33 +49,44 @@ export function MemberProfileClient() {
 
   async function uploadAvatar(file: File) {
     if (paused) {
-      setError("Profile changes are disabled while your account is paused.");
+      setPhotoError("Profile changes are disabled while your account is paused.");
       return;
     }
-    if (file.size > 400_000) {
-      setError("Image must be under 400KB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const avatarUrl = reader.result as string;
+
+    setUploadingPhoto(true);
+    setPhotoMessage(null);
+    setPhotoError(null);
+
+    try {
+      const avatarUrl = await compressImageToWebpDataUrl(file);
       const response = await fetch("/api/member/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ avatarUrl }),
       });
       const data = await response.json();
+
       if (!response.ok) {
-        setError(data.error ?? "Upload failed.");
+        setPhotoError(typeof data.error === "string" ? data.error : "Upload failed.");
         return;
       }
-      setMessage("Profile photo updated.");
-      setError(null);
-      setProfile((p) =>
-        p ? { ...p, avatar_url: data.profile?.avatar_url ?? avatarUrl } : p
+
+      setPhotoMessage("Profile photo updated.");
+      setProfile((current) =>
+        current
+          ? { ...current, avatar_url: data.profile?.avatar_url ?? avatarUrl }
+          : current
       );
-    };
-    reader.readAsDataURL(file);
+    } catch (uploadError) {
+      setPhotoError(
+        uploadError instanceof Error ? uploadError.message : "Upload failed."
+      );
+    } finally {
+      setUploadingPhoto(false);
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+    }
   }
 
   async function saveDetails(event: React.FormEvent) {
@@ -121,7 +136,7 @@ export function MemberProfileClient() {
             Your Photo
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+        <CardContent className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
           <div className="relative size-24 overflow-hidden rounded-full border-2 border-northium-gold bg-northium-surface">
             {profile.avatar_url ? (
               <Image
@@ -139,28 +154,35 @@ export function MemberProfileClient() {
             )}
           </div>
           <div className="space-y-2">
-            <p className="text-sm text-northium-muted">
-              Upload a photo so you recognize your account each time you sign in.
-            </p>
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
               className="hidden"
-              disabled={paused}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
+              disabled={paused || uploadingPhoto}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
                 if (file) void uploadAvatar(file);
               }}
             />
             <Button
               variant="outline"
               size="sm"
-              disabled={paused}
+              disabled={paused || uploadingPhoto}
               onClick={() => fileRef.current?.click()}
             >
-              Upload Photo
+              {uploadingPhoto ? "Uploading…" : "Upload Photo"}
             </Button>
+            {photoError && (
+              <p className="text-sm text-red-600" role="alert">
+                {photoError}
+              </p>
+            )}
+            {photoMessage && (
+              <p className="text-sm text-northium-success" role="status">
+                {photoMessage}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

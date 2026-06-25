@@ -12,7 +12,13 @@ const profileUpdateSchema = z.object({
   avatarUrl: z
     .string()
     .max(600_000)
-    .refine((v) => v.startsWith("data:image/"), "Avatar must be an image.")
+    .refine(
+      (value) =>
+        value.startsWith("data:image/webp") ||
+        value.startsWith("data:image/jpeg") ||
+        value.startsWith("data:image/png"),
+      "Avatar must be an image."
+    )
     .optional(),
 });
 
