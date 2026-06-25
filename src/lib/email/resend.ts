@@ -89,6 +89,18 @@ export async function sendResendEmail({
     const detail = await response.text();
     throw new EmailDeliveryError(parseResendError(response.status, detail));
   }
+
+  try {
+    const payload = (await response.json()) as { id?: string };
+    if (!payload.id) {
+      console.warn("[Northium Email] Resend accepted request without message id.", {
+        subject,
+        to: recipients,
+      });
+    }
+  } catch {
+    // Non-JSON success bodies are unexpected but delivery may still have succeeded.
+  }
 }
 
 export async function emailDeliveryStatus() {

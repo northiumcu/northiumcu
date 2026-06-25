@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveMemberRecoveryByEmail } from "@/lib/auth/resolve-member-recovery";
 import { forgotUsernameSchema } from "@/lib/auth/validators";
 import { EmailDeliveryError } from "@/lib/email/config";
 import { sendUsernameRecoveryEmail } from "@/lib/email/send-username-recovery";
@@ -26,34 +27,24 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const normalizedEmail = parsed.data.email.toLowerCase().trim();
+    const target = await resolveMemberRecoveryByEmail(admin, parsed.data.email);
 
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("email, first_name, username, staff_role, member_status")
-      .eq("email", normalizedEmail)
-      .maybeSingle();
-
-    if (
-      profile &&
-      profile.staff_role === "member" &&
-      profile.member_status !== "suspended" &&
-      profile.username?.trim()
-    ) {
-      try {
-        await sendUsernameRecoveryEmail({
-          to: profile.email,
-          firstName: profile.first_name?.trim() || "Member",
-          username: profile.username.trim(),
-        });
-      } catch (emailError) {
-        throw emailError;
-      }
+    if (target) {
+      await sendUsernameRecoveryEmail({
+        to: target.email,
+        firstName: target.firstName,
+        username: target.username,
+      });
+    } else {
+      console.info(
+        "[Northium Recovery] No deliverable member account matched the requested email."
+      );
     }
 
     return NextResponse.json({ message: SUCCESS_MESSAGE });
   } catch (error) {
     if (error instanceof EmailDeliveryError) {
+      console.error("[Northium Recovery] Email delivery failed:", error.message);
       return NextResponse.json(
         {
           error:
@@ -63,6 +54,7 @@ export async function POST(request: Request) {
       );
     }
     const message = error instanceof Error ? error.message : "Request failed.";
+    console.error("[Northium Recovery] Request failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
