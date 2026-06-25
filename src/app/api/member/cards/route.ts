@@ -7,6 +7,7 @@ import { pinSchema } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { MASTERCARD_FEE } from "@/lib/banking/member-products";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import { maskedPanFromLastFour } from "@/lib/banking/card-issuance";
 
 const applySchema = z.object({
   sourceAccountId: z.string().uuid(),
@@ -14,7 +15,7 @@ const applySchema = z.object({
 });
 
 function randomLastFour() {
-  return String(Math.floor(1000 + Math.random() * 9000));
+  return "0000";
 }
 
 function deliveryEta() {
@@ -32,13 +33,24 @@ export async function GET() {
     const { data, error } = await auth.admin
       .from("cards")
       .select(
-        "id, card_type, product_name, cardholder_name, last_four, status, delivery_eta, design_variant, linked_account_id, expires_at, created_at"
+        "id, card_type, product_name, cardholder_name, last_four, status, delivery_eta, design_variant, linked_account_id, expires_at, pan_encrypted, created_at"
       )
       .eq("member_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ cards: data ?? [] });
+
+    const cards = (data ?? []).map(({ pan_encrypted, ...card }) => ({
+      ...card,
+      detailsAvailable:
+        card.status === "active" && Boolean(pan_encrypted),
+      maskedPan:
+        card.status === "active" && card.last_four !== "0000"
+          ? maskedPanFromLastFour(card.last_four)
+          : null,
+    }));
+
+    return NextResponse.json({ cards });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed.";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -123,11 +135,6 @@ export async function POST(request: Request) {
         application_fee_paid: true,
         design_variant: "northium_gold",
         delivery_eta: deliveryEta(),
-        expires_at: new Date(
-          new Date().setFullYear(new Date().getFullYear() + 4)
-        )
-          .toISOString()
-          .slice(0, 10),
       })
       .select("id, status, last_four, delivery_eta, product_name, design_variant")
       .single();
@@ -139,7 +146,7 @@ export async function POST(request: Request) {
     await notifyMember(admin, {
       userId: userId,
       title: "Mastercard application received",
-      message: `Your Northium Mastercard is being prepared. Estimated delivery: 7–30 business days.`,
+      message: `Your Northium Mastercard application was received and is pending review by Northium.`,
       category: "transactional",
     });
 
