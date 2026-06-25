@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 export async function POST(
   request: Request,
@@ -54,6 +58,18 @@ export async function POST(
         category: "transactional",
       });
     }
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: user.id,
+      actorRole: auth.profile.staff_role,
+      action: "admin.membership.rejected",
+      resourceType: "membership_application",
+      resourceId: id,
+      reasonNote: reason,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({ message: "Application rejected." });
   } catch (error) {

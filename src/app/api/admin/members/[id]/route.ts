@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { encryptSensitive } from "@/lib/auth/crypto";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const updateMemberSchema = z.object({
   employerCompanyName: z.string().max(120).optional(),
@@ -131,6 +135,20 @@ export async function PATCH(
     if (error || !data) {
       return NextResponse.json({ error: error?.message ?? "Update failed." }, { status: 400 });
     }
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: "admin.member.updated",
+      resourceType: "profile",
+      resourceId: id,
+      metadata: {
+        fields: Object.keys(input),
+      },
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({ member: data });
   } catch (error) {

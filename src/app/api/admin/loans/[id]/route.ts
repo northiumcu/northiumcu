@@ -3,6 +3,10 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
 import { formatCurrency } from "@/lib/format/currency";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const decisionSchema = z.object({
   decision: z.enum(["approved", "denied", "delayed"]),
@@ -78,6 +82,18 @@ export async function POST(
     }
 
     await admin.from("loans").update(updates).eq("id", id);
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: `admin.loan.${parsed.data.decision}`,
+      resourceType: "loan",
+      resourceId: id,
+      reasonNote: parsed.data.note,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({ message: `Loan ${parsed.data.decision}.` });
   } catch (error) {

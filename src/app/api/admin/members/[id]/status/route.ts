@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const statusSchema = z.object({
   memberStatus: z.enum(["active", "paused", "suspended", "applicant"]),
@@ -75,6 +79,18 @@ export async function PATCH(
         category: "security",
       });
     }
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: `admin.member.status.${memberStatus}`,
+      resourceType: "profile",
+      resourceId: id,
+      reasonNote: note,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({ member: data });
   } catch (error) {

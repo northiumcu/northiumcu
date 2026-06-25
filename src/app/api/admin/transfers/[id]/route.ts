@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { completeTransferAsAdmin } from "@/lib/banking/execute-transfer";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const decisionSchema = z.object({
   decision: z.enum(["approved", "denied", "delayed", "pending"]),
@@ -31,6 +35,18 @@ export async function POST(
       parsed.data.decision,
       parsed.data.note
     );
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: profile.id,
+      actorRole: profile.staff_role,
+      action: `admin.transfer.${parsed.data.decision}`,
+      resourceType: "transfer",
+      resourceId: id,
+      reasonNote: parsed.data.note,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({ message: `Transfer ${parsed.data.decision}.` });
   } catch (error) {

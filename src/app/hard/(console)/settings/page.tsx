@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { StaffPasswordForm } from "@/components/auth/staff-password-form";
 import { AdminEmailSettingsPanel } from "@/components/admin/admin-email-settings-panel";
 import { institution } from "@/lib/institution";
@@ -83,9 +82,6 @@ export default function AdminSettingsPage() {
             Institutional identity values are governed by INSTITUTION.lock.md
             and require executive approval to change.
           </p>
-          <Button className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90">
-            Save Operational Settings
-          </Button>
         </CardContent>
       </Card>
     </div>

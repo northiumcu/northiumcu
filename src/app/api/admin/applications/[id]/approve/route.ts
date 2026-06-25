@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/require-staff";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await context.params;
-    const body = await _request.json().catch(() => ({}));
+    const body = await request.json().catch(() => ({}));
     const requireKyc = body.requireKyc !== false;
 
     const auth = await requireStaff();
@@ -33,6 +37,18 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: user.id,
+      actorRole: auth.profile.staff_role,
+      action: "admin.membership.approved",
+      resourceType: "membership_application",
+      resourceId: id,
+      metadata: { requireKyc },
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({
       message: "Membership approved and account number issued.",

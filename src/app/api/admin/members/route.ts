@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { provisionApprovedMember } from "@/lib/auth/provision-member";
 import { adminCreateMemberSchema } from "@/lib/auth/validators";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 export async function GET() {
   try {
@@ -81,6 +85,17 @@ export async function POST(request: Request) {
       auth.user.id,
       parsed.data
     );
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(auth.admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: "admin.member.created",
+      resourceType: "profile",
+      resourceId: member.profileId,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
+    });
 
     return NextResponse.json({
       message: "Member created and approved.",

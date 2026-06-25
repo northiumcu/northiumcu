@@ -3,6 +3,10 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { buildTransactionReference } from "@/lib/banking/transaction-reference";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const adjustSchema = z.object({
   direction: z.enum(["credit", "debit"]),
@@ -41,6 +45,19 @@ export async function POST(
       type: "adjustment",
       description: label,
       reference: buildTransactionReference(),
+    });
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: `admin.account.${direction}`,
+      resourceType: "account",
+      resourceId: accountId,
+      reasonNote: label,
+      metadata: { amount, direction },
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
     });
 
     return NextResponse.json(result);

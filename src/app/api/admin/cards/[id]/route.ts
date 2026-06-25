@@ -3,6 +3,10 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
 import { issueMastercardCredentials } from "@/lib/banking/card-issuance";
+import {
+  logAdminAction,
+  requestAuditContext,
+} from "@/lib/audit/log-admin-action";
 
 const decisionSchema = z.object({
   decision: z.enum(["approved", "denied"]),
@@ -63,6 +67,18 @@ export async function PATCH(
         category: "transactional",
       });
 
+      const audit = requestAuditContext(request);
+      await logAdminAction(admin, {
+        actorId: auth.profile.id,
+        actorRole: auth.profile.staff_role,
+        action: "admin.card.denied",
+        resourceType: "card",
+        resourceId: id,
+        reasonNote: note,
+        ipAddress: audit.ipAddress,
+        userAgent: audit.userAgent,
+      });
+
       return NextResponse.json({ message: "Card application denied." });
     }
 
@@ -100,6 +116,18 @@ export async function PATCH(
         note ??
         "Your Northium Mastercard has been approved. Sign in to Cards to view your card details.",
       category: "transactional",
+    });
+
+    const audit = requestAuditContext(request);
+    await logAdminAction(admin, {
+      actorId: auth.profile.id,
+      actorRole: auth.profile.staff_role,
+      action: "admin.card.approved",
+      resourceType: "card",
+      resourceId: id,
+      reasonNote: note,
+      ipAddress: audit.ipAddress,
+      userAgent: audit.userAgent,
     });
 
     return NextResponse.json({
