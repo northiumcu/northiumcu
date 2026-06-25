@@ -1,4 +1,5 @@
 import { EmailDeliveryError } from "@/lib/email/config";
+import { institution } from "@/lib/institution";
 import {
   getDefaultResendFromEmail,
   getResendFromAddress,
@@ -17,6 +18,19 @@ export type SendResendEmailInput = {
 type ResendErrorBody = {
   message?: string;
   name?: string;
+};
+
+type ResendDomainRecord = {
+  name: string;
+  status: string;
+};
+
+export type ResendConnectionStatus = {
+  apiReachable: boolean;
+  fromDomain: string | null;
+  fromDomainVerified: boolean;
+  domains: ResendDomainRecord[];
+  error?: string;
 };
 
 function parseResendError(status: number, detail: string): string {
@@ -47,13 +61,75 @@ function parseResendError(status: number, detail: string): string {
   return `Failed to send email (${status}): ${message}`;
 }
 
+function extractFromEmail(from: string): string | null {
+  const bracketMatch = from.match(/<([^>]+)>/);
+  const email = (bracketMatch?.[1] ?? from).trim().toLowerCase();
+  return email.includes("@") ? email : null;
+}
+
+export async function verifyResendConnection(): Promise<ResendConnectionStatus> {
+  const credentials = await resolveResendCredentials();
+  const fromEmail = credentials ? extractFromEmail(credentials.from) : null;
+  const fromDomain = fromEmail?.split("@")[1] ?? null;
+
+  if (!credentials) {
+    return {
+      apiReachable: false,
+      fromDomain,
+      fromDomainVerified: false,
+      domains: [],
+      error: "Email delivery credentials are not configured.",
+    };
+  }
+
+  const response = await fetch("https://api.resend.com/domains", {
+    headers: {
+      Authorization: `Bearer ${credentials.apiKey}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    return {
+      apiReachable: false,
+      fromDomain,
+      fromDomainVerified: false,
+      domains: [],
+      error: parseResendError(response.status, detail),
+    };
+  }
+
+  const payload = (await response.json()) as {
+    data?: ResendDomainRecord[];
+  };
+  const domains = payload.data ?? [];
+  const fromDomainVerified = fromDomain
+    ? domains.some(
+        (domain) =>
+          domain.name.toLowerCase() === fromDomain &&
+          domain.status.toLowerCase() === "verified"
+      )
+    : false;
+
+  return {
+    apiReachable: true,
+    fromDomain,
+    fromDomainVerified,
+    domains: domains.map((domain) => ({
+      name: domain.name,
+      status: domain.status,
+    })),
+  };
+}
+
 export async function sendResendEmail({
   to,
   subject,
   text,
   html,
   replyTo,
-}: SendResendEmailInput): Promise<string | null> {
+}: SendResendEmailInput): Promise<string> {
   const recipients = Array.isArray(to) ? to : [to];
   const credentials = await resolveResendCredentials();
 
@@ -66,7 +142,7 @@ export async function sendResendEmail({
     console.info(
       `[Northium Email] ${subject} → ${recipients.join(", ")}\n${text}`
     );
-    return null;
+    return "dev-logged";
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -81,7 +157,7 @@ export async function sendResendEmail({
       subject,
       text,
       ...(html ? { html } : {}),
-      ...(replyTo ? { reply_to: replyTo } : {}),
+      reply_to: replyTo ?? institution.supportEmail,
     }),
   });
 
@@ -90,23 +166,43 @@ export async function sendResendEmail({
     throw new EmailDeliveryError(parseResendError(response.status, detail));
   }
 
+  let payload: { id?: string };
   try {
-    const payload = (await response.json()) as { id?: string };
-    if (!payload.id) {
-      console.warn("[Northium Email] Resend accepted request without message id.", {
-        subject,
-        to: recipients,
-      });
-    }
-    return payload.id ?? null;
+    payload = (await response.json()) as { id?: string };
   } catch {
-    // Non-JSON success bodies are unexpected but delivery may still have succeeded.
-    return null;
+    throw new EmailDeliveryError("Email provider returned an invalid response.");
   }
+
+  if (!payload.id) {
+    throw new EmailDeliveryError(
+      "Email provider accepted the request but did not return a message id."
+    );
+  }
+
+  return payload.id;
 }
 
 export async function emailDeliveryStatus() {
   const credentials = await resolveResendCredentials();
+  let resend: ResendConnectionStatus | null = null;
+
+  if (credentials) {
+    try {
+      resend = await verifyResendConnection();
+    } catch (error) {
+      resend = {
+        apiReachable: false,
+        fromDomain: extractFromEmail(credentials.from)?.split("@")[1] ?? null,
+        fromDomainVerified: false,
+        domains: [],
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not verify Resend connection.",
+      };
+    }
+  }
+
   return {
     configured: Boolean(credentials),
     source: credentials?.source ?? "none",
@@ -117,6 +213,7 @@ export async function emailDeliveryStatus() {
         process.env.RESEND_KEY?.trim() ||
         process.env.RESEND_SECRET?.trim()
     ),
+    resend,
   };
 }
 

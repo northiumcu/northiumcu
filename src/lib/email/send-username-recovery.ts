@@ -9,7 +9,7 @@ export async function sendUsernameRecoveryEmail({
   to: string;
   firstName: string;
   username: string;
-}): Promise<string | null> {
+}): Promise<string> {
   const message = buildUsernameRecoveryEmail({ firstName, username });
 
   return sendResendEmail({

@@ -25,6 +25,7 @@ export async function GET() {
       from: status.from,
       defaultFromEmail: status.defaultFromEmail,
       envVarPresent: status.envVarPresent,
+      resend: status.resend,
       databaseConfigured: Boolean(stored?.has_api_key),
       storedFromEmail: stored?.from_email ?? null,
       updatedAt: data?.updated_at ?? null,

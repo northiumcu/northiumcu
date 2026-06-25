@@ -6,6 +6,8 @@ import { EmailDeliveryError } from "@/lib/email/config";
 import { sendUsernameRecoveryEmail } from "@/lib/email/send-username-recovery";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 
+export const runtime = "nodejs";
+
 const SUCCESS_MESSAGE =
   "If an account exists for that email, we sent your username and sign-in instructions.";
 
@@ -36,7 +38,8 @@ export async function POST(request: Request) {
         username: target.username,
       });
       console.info("[Northium Recovery] Username reminder sent.", {
-        messageId: messageId ?? "unknown",
+        messageId,
+        to: target.email,
       });
     } else {
       console.info(
