@@ -53,7 +53,7 @@ export async function sendResendEmail({
   text,
   html,
   replyTo,
-}: SendResendEmailInput): Promise<void> {
+}: SendResendEmailInput): Promise<string | null> {
   const recipients = Array.isArray(to) ? to : [to];
   const credentials = await resolveResendCredentials();
 
@@ -66,7 +66,7 @@ export async function sendResendEmail({
     console.info(
       `[Northium Email] ${subject} → ${recipients.join(", ")}\n${text}`
     );
-    return;
+    return null;
   }
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -98,8 +98,10 @@ export async function sendResendEmail({
         to: recipients,
       });
     }
+    return payload.id ?? null;
   } catch {
     // Non-JSON success bodies are unexpected but delivery may still have succeeded.
+    return null;
   }
 }
 

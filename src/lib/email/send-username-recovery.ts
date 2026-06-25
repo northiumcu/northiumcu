@@ -9,10 +9,10 @@ export async function sendUsernameRecoveryEmail({
   to: string;
   firstName: string;
   username: string;
-}) {
+}): Promise<string | null> {
   const message = buildUsernameRecoveryEmail({ firstName, username });
 
-  await sendResendEmail({
+  return sendResendEmail({
     to,
     subject: message.subject,
     text: message.text,

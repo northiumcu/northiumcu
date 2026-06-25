@@ -50,7 +50,7 @@ function profileToRecoveryTarget(
   username: string,
   fallbackEmail?: string
 ): MemberRecoveryTarget | null {
-  if (profile.staff_role !== "member" || profile.member_status === "suspended") {
+  if (profile.staff_role !== "member") {
     return null;
   }
 

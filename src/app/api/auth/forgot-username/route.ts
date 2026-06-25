@@ -30,10 +30,13 @@ export async function POST(request: Request) {
     const target = await resolveMemberRecoveryByEmail(admin, parsed.data.email);
 
     if (target) {
-      await sendUsernameRecoveryEmail({
+      const messageId = await sendUsernameRecoveryEmail({
         to: target.email,
         firstName: target.firstName,
         username: target.username,
+      });
+      console.info("[Northium Recovery] Username reminder sent.", {
+        messageId: messageId ?? "unknown",
       });
     } else {
       console.info(
