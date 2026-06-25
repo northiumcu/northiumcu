@@ -140,6 +140,14 @@ export const otpVerifySchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
 });
 
+export const signupStatusSchema = z.object({
+  email: z.string().email("Enter a valid email address."),
+});
+
+export const signupResendSchema = z.object({
+  email: z.string().email("Enter a valid email address."),
+});
+
 export const forgotPinSchema = z.object({
   username: usernameSchema,
 });

@@ -7,6 +7,10 @@ import { resolvePostLoginPath } from "@/lib/auth/admin-paths";
 import { SUSPENDED_MESSAGE } from "@/lib/auth/require-member";
 import { sendWelcomeMemberEmail } from "@/lib/email/send-welcome";
 import { otpVerifySchema } from "@/lib/auth/validators";
+import {
+  ensureMembershipApplication,
+  pendingSignupExpiresAt,
+} from "@/lib/auth/signup-session";
 
 export async function POST(request: Request) {
   try {
@@ -31,11 +35,23 @@ export async function POST(request: Request) {
     }
 
     if (new Date(challenge.expires_at) < new Date()) {
-      return NextResponse.json({ error: "Code has expired." }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Code has expired. Request a new verification code to continue.",
+          canResend: challenge.purpose === "signup",
+        },
+        { status: 400 }
+      );
     }
 
     if (challenge.attempts >= challenge.max_attempts) {
-      return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
+      return NextResponse.json(
+        {
+          error: "Too many attempts. Request a new verification code to continue.",
+          canResend: challenge.purpose === "signup",
+        },
+        { status: 429 }
+      );
     }
 
     if (!verifyOtp(code, challenge.code_hash)) {
@@ -59,61 +75,150 @@ export async function POST(request: Request) {
         .single();
 
       if (pendingError || !pending) {
-        return NextResponse.json({ error: "Signup session not found." }, { status: 404 });
-      }
+        const { data: existingProfile } = await admin
+          .from("profiles")
+          .select("id, email, internal_auth_secret, member_status, first_name")
+          .eq("email", challenge.email)
+          .maybeSingle();
 
-      const internalPassword = decryptSensitive(pending.internal_auth_secret);
+        if (existingProfile?.internal_auth_secret) {
+          const internalPassword = decryptSensitive(existingProfile.internal_auth_secret);
+          const cookieStore = await cookies();
+          const supabase = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+              cookies: {
+                getAll() {
+                  return cookieStore.getAll();
+                },
+                setAll(cookiesToSet) {
+                  cookiesToSet.forEach(({ name, value, options }) =>
+                    cookieStore.set(name, value, options)
+                  );
+                },
+              },
+            }
+          );
 
-      const { data: authUser, error: createError } =
-        await admin.auth.admin.createUser({
-          email: pending.email,
-          password: internalPassword,
-          email_confirm: true,
-          user_metadata: {
-            first_name: pending.first_name,
-            last_name: pending.last_name,
-            username: pending.username,
-          },
-        });
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: existingProfile.email,
+            password: internalPassword,
+          });
 
-      if (createError || !authUser.user) {
+          if (!signInError) {
+            return NextResponse.json({
+              verified: true,
+              redirectTo: "/member",
+              message:
+                "Welcome back. Complete identity verification in your member portal to finish membership.",
+            });
+          }
+        }
+
         return NextResponse.json(
-          { error: createError?.message ?? "Failed to create account." },
-          { status: 500 }
+          {
+            error:
+              "Application session not found. Submit your application again or request a new verification code.",
+            canResend: true,
+          },
+          { status: 404 }
         );
       }
 
-      const profileId = authUser.user.id;
+      if (new Date(pending.expires_at) < new Date()) {
+        await admin
+          .from("pending_signups")
+          .update({ expires_at: pendingSignupExpiresAt() })
+          .eq("email", pending.email);
+      }
 
-      await admin
+      const internalPassword = decryptSensitive(pending.internal_auth_secret);
+      let profileId: string;
+      let createdNewAccount = false;
+
+      const { data: existingProfile } = await admin
         .from("profiles")
-        .update({
-          username: pending.username,
-          pin_hash: pending.pin_hash,
-          phone: pending.phone,
-          email_verified_at: new Date().toISOString(),
-          internal_auth_secret: pending.internal_auth_secret,
-          member_status: "applicant",
-        })
-        .eq("id", profileId);
+        .select("id, email, internal_auth_secret, member_status")
+        .eq("email", pending.email)
+        .maybeSingle();
 
-      const { data: application, error: appError } = await admin
-        .from("membership_applications")
-        .insert({
-          profile_id: profileId,
-          email: pending.email,
-          first_name: pending.first_name,
-          last_name: pending.last_name,
-          phone: pending.phone,
-          status: "draft",
-          eligibility_category: pending.eligibility_category,
-          requested_account_types: pending.requested_account_types ?? ["checking"],
-        })
-        .select("id")
-        .single();
+      if (existingProfile) {
+        profileId = existingProfile.id;
+        await admin
+          .from("profiles")
+          .update({
+            username: pending.username,
+            pin_hash: pending.pin_hash,
+            phone: pending.phone,
+            email_verified_at: new Date().toISOString(),
+            internal_auth_secret: pending.internal_auth_secret,
+            member_status: "applicant",
+          })
+          .eq("id", profileId);
+      } else {
+        const { data: authUser, error: createError } =
+          await admin.auth.admin.createUser({
+            email: pending.email,
+            password: internalPassword,
+            email_confirm: true,
+            user_metadata: {
+              first_name: pending.first_name,
+              last_name: pending.last_name,
+              username: pending.username,
+            },
+          });
 
-      if (appError || !application) {
-        return NextResponse.json({ error: appError?.message }, { status: 500 });
+        if (createError || !authUser.user) {
+          const duplicate =
+            createError?.message?.toLowerCase().includes("already") ?? false;
+          if (!duplicate) {
+            return NextResponse.json(
+              { error: createError?.message ?? "Failed to create account." },
+              { status: 500 }
+            );
+          }
+
+          const { data: recoveredProfile } = await admin
+            .from("profiles")
+            .select("id")
+            .eq("email", pending.email)
+            .maybeSingle();
+
+          if (!recoveredProfile) {
+            return NextResponse.json(
+              { error: "Failed to recover your account. Please contact support." },
+              { status: 500 }
+            );
+          }
+
+          profileId = recoveredProfile.id;
+        } else {
+          profileId = authUser.user.id;
+          createdNewAccount = true;
+        }
+
+        await admin
+          .from("profiles")
+          .update({
+            username: pending.username,
+            pin_hash: pending.pin_hash,
+            phone: pending.phone,
+            email_verified_at: new Date().toISOString(),
+            internal_auth_secret: pending.internal_auth_secret,
+            member_status: "applicant",
+          })
+          .eq("id", profileId);
+      }
+
+      try {
+        await ensureMembershipApplication(admin, profileId, pending);
+      } catch (applicationError) {
+        const message =
+          applicationError instanceof Error
+            ? applicationError.message
+            : "Failed to create membership application.";
+        return NextResponse.json({ error: message }, { status: 500 });
       }
 
       await admin.from("pending_signups").delete().eq("email", pending.email);
@@ -145,17 +250,20 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             verified: true,
+            redirectTo: "/sign-in",
             message:
-              "Email verified. Sign in with your username and PIN to continue.",
+              "Email verified. Sign in with your username and PIN to continue membership.",
           },
           { status: 200 }
         );
       }
 
-      await sendWelcomeMemberEmail({
-        to: pending.email,
-        firstName: pending.first_name,
-      });
+      if (createdNewAccount) {
+        await sendWelcomeMemberEmail({
+          to: pending.email,
+          firstName: pending.first_name,
+        });
+      }
 
       return NextResponse.json({
         verified: true,

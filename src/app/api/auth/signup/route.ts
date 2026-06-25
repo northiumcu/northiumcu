@@ -12,6 +12,12 @@ import { signupSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
 import { EmailDeliveryError } from "@/lib/email/config";
 import { verifyMathChallenge } from "@/lib/security/human-check";
+import {
+  invalidateSignupChallenges,
+  pendingSignupExpiresAt,
+  resolveSignupStatus,
+  signupOtpExpiresAt,
+} from "@/lib/auth/signup-session";
 
 export async function POST(request: Request) {
   try {
@@ -39,25 +45,39 @@ export async function POST(request: Request) {
     const normalizedUsername = data.username.toLowerCase();
     const normalizedEmail = data.email.toLowerCase().trim();
 
-    const [{ data: existingUser }, { data: existingUsername }] =
-      await Promise.all([
-        admin.from("profiles").select("id").eq("email", normalizedEmail).maybeSingle(),
-        admin
-          .from("profiles")
-          .select("id")
-          .ilike("username", normalizedUsername)
-          .maybeSingle(),
-      ]);
+    const { data: existingUsername } = await admin
+      .from("profiles")
+      .select("id")
+      .ilike("username", normalizedUsername)
+      .maybeSingle();
 
-    if (existingUser || existingUsername) {
+    const signupStatus = await resolveSignupStatus(admin, normalizedEmail);
+    if (signupStatus.stage === "registered_complete") {
       return NextResponse.json(
-        { error: "Username or email is already registered." },
+        { error: "This email is already registered. Sign in to continue." },
+        { status: 409 }
+      );
+    }
+    if (signupStatus.stage === "registered_incomplete") {
+      return NextResponse.json(
+        {
+          error:
+            "Your account is already created. Sign in with your username and PIN to finish membership.",
+          stage: signupStatus.stage,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (existingUsername && signupStatus.stage === "none") {
+      return NextResponse.json(
+        { error: "Username is already registered." },
         { status: 409 }
       );
     }
 
     const internalSecret = generateInternalAuthSecret();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = pendingSignupExpiresAt();
 
     const { error: pendingError } = await admin.from("pending_signups").upsert(
       {
@@ -81,6 +101,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: pendingError.message }, { status: 500 });
     }
 
+    await invalidateSignupChallenges(admin, normalizedEmail);
+
     const otp = generateOtpCode();
     const { data: challenge, error: otpError } = await admin
       .from("auth_otp_challenges")
@@ -88,7 +110,7 @@ export async function POST(request: Request) {
         email: normalizedEmail,
         purpose: "signup",
         code_hash: hashOtp(otp),
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        expires_at: signupOtpExpiresAt(),
         metadata: { username: normalizedUsername },
       })
       .select("id")
