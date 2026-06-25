@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptSensitive, encryptSensitive, lastFour, verifyPin } from "@/lib/auth/crypto";
 import type { TransferCreateInput } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
-import { notifyMember } from "@/lib/banking/member-notifications";
+import { notifyMember, notifyMemberAsync } from "@/lib/banking/member-notifications";
 import {
   getActiveBillPayPayee,
   resolvePayeeAccountNumber,
@@ -181,14 +181,14 @@ export async function executeMemberTransfer(
       throw debitError;
     }
 
-    await notifyMember(admin, {
+    notifyMemberAsync(admin, {
       userId: memberId,
       title: "Transfer completed",
       message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} was processed successfully.`,
       category: "transactional",
     });
   } else {
-    await notifyMember(admin, {
+    notifyMemberAsync(admin, {
       userId: memberId,
       title: "Transfer pending review",
       message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} is awaiting administrator approval.`,

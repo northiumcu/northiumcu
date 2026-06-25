@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveMemberWrite } from "@/lib/auth/require-member";
 import { transferCreateSchema } from "@/lib/auth/validators";
 import { executeMemberTransfer } from "@/lib/banking/execute-transfer";
+
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
@@ -21,8 +22,7 @@ export async function POST(request: Request) {
     const auth = await requireActiveMemberWrite();
     if ("error" in auth) return auth.error;
 
-    const admin = createAdminClient();
-    const result = await executeMemberTransfer(admin, auth.user.id, parsed.data);
+    const result = await executeMemberTransfer(auth.admin, auth.user.id, parsed.data);
 
     return NextResponse.json(result);
   } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { CheckCircle2, Download, XCircle } from "lucide-react";
@@ -32,6 +32,9 @@ type Step = "details" | "confirm" | "pin" | "processing" | "failed" | "success";
 
 const TRANSFER_FAILURE_MESSAGE =
   "This transfer could not be concluded. Please try again or contact your Northium account officer for assistance.";
+
+const TRANSFER_TIMEOUT_MS = 25_000;
+const TRANSFER_SLOW_MS = 8_000;
 
 function transferRequiresSecurityCodes(transferType: string) {
   return (
@@ -134,6 +137,9 @@ export function TransferFlow() {
   const [transferId, setTransferId] = useState<string | null>(null);
   const [pendingReview, setPendingReview] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [processingSlow, setProcessingSlow] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   const isZelle = type === "zelle";
   const showConfirm = !isZelle;
@@ -210,6 +216,8 @@ export function TransferFlow() {
   }
 
   async function submitTransfer() {
+    if (submitLockRef.current) return;
+
     if (showSecurityCodes && cotRequired && !cotCode.trim()) {
       setError("Enter your COT code to continue.");
       return;
@@ -223,72 +231,109 @@ export function TransferFlow() {
       return;
     }
 
+    submitLockRef.current = true;
+    setSubmitting(true);
     setError(null);
+    setProcessingSlow(false);
     setStep("processing");
     setProgress(0);
 
     const tick = setInterval(() => {
-      setProgress((p) => (p < 55 ? p + 4 : p));
-    }, 100);
+      setProgress((p) => (p < 92 ? p + 2 : p));
+    }, 200);
 
-    const response = await fetch("/api/member/transfers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        buildTransferRequestBody({
-          type,
-          sourceAccountId,
-          destinationAccountId,
-          amount,
-          memo,
-          beneficiaryName,
-          beneficiaryBank,
-          routingNumber,
-          accountNumber,
-          zelleContact,
-          wireSwift,
-          wireIban,
-          wireCountry,
-          cotCode,
-          imfCode,
-          pin,
-          showSecurityCodes,
-          cotRequired,
-          imfRequired,
-          isZelle,
-        })
-      ),
-    });
+    const slowTimer = setTimeout(() => {
+      setProcessingSlow(true);
+    }, TRANSFER_SLOW_MS);
 
-    clearInterval(tick);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TRANSFER_TIMEOUT_MS);
 
-    const data = await response.json();
+    try {
+      const response = await fetch("/api/member/transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify(
+          buildTransferRequestBody({
+            type,
+            sourceAccountId,
+            destinationAccountId,
+            amount,
+            memo,
+            beneficiaryName,
+            beneficiaryBank,
+            routingNumber,
+            accountNumber,
+            zelleContact,
+            wireSwift,
+            wireIban,
+            wireCountry,
+            cotCode,
+            imfCode,
+            pin,
+            showSecurityCodes,
+            cotRequired,
+            imfRequired,
+            isZelle,
+          })
+        ),
+      });
 
-    if (!response.ok) {
-      setProgress(60);
-      await new Promise((r) => setTimeout(r, 900));
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        transfer?: {
+          id?: string;
+          status?: string;
+          member_message?: string | null;
+        };
+      };
+
+      if (!response.ok) {
+        setProgress(60);
+        await new Promise((r) => setTimeout(r, 400));
+        setStatusMessage(
+          typeof data.error === "string" && data.error.trim()
+            ? data.error
+            : TRANSFER_FAILURE_MESSAGE
+        );
+        setStep("failed");
+        setPin("");
+        return;
+      }
+
+      setProgress(100);
+      await new Promise((r) => setTimeout(r, 300));
+
+      setTransferId(data.transfer?.id ?? null);
+      setPendingReview(data.transfer?.status === "pending_approval");
       setStatusMessage(
-        typeof data.error === "string" && data.error.trim()
-          ? data.error
-          : TRANSFER_FAILURE_MESSAGE
+        data.transfer?.member_message ?? "Transfer completed successfully."
+      );
+      setStep("success");
+      setPin("");
+      setCotCode("");
+      setImfCode("");
+    } catch (error) {
+      const timedOut =
+        error instanceof DOMException && error.name === "AbortError";
+      setProgress(60);
+      await new Promise((r) => setTimeout(r, 400));
+      setStatusMessage(
+        timedOut
+          ? "This transfer is taking too long to complete. Please wait a moment, check your account activity, and try again if the transfer did not post."
+          : "We could not reach Northium to complete this transfer. Check your connection and try again."
       );
       setStep("failed");
       setPin("");
-      return;
+    } finally {
+      clearInterval(tick);
+      clearTimeout(slowTimer);
+      clearTimeout(timeoutId);
+      submitLockRef.current = false;
+      setSubmitting(false);
+      setProcessingSlow(false);
     }
-
-    setProgress(100);
-    await new Promise((r) => setTimeout(r, 400));
-
-    setTransferId(data.transfer?.id ?? null);
-    setPendingReview(data.transfer?.status === "pending_approval");
-    setStatusMessage(
-      data.transfer?.member_message ?? "Transfer completed successfully."
-    );
-    setStep("success");
-    setPin("");
-    setCotCode("");
-    setImfCode("");
   }
 
   function retryTransfer() {
@@ -296,6 +341,9 @@ export function TransferFlow() {
     setProgress(0);
     setError(null);
     setStatusMessage("");
+    setProcessingSlow(false);
+    submitLockRef.current = false;
+    setSubmitting(false);
   }
 
   function resetFlow() {
@@ -622,11 +670,11 @@ export function TransferFlow() {
                 Back
               </Button>
               <Button
-                disabled={!pinStepReady}
+                disabled={!pinStepReady || submitting}
                 onClick={() => void submitTransfer()}
                 className="flex-1 bg-northium-primary hover:bg-northium-secondary"
               >
-                Submit Transfer
+                {submitting ? "Submitting…" : "Submit Transfer"}
               </Button>
             </div>
           </CardContent>
@@ -663,7 +711,29 @@ export function TransferFlow() {
                 {progress}%
               </span>
             </div>
-            <p className="text-sm text-northium-muted">Processing your transfer…</p>
+            <p className="text-sm text-northium-muted">
+              {processingSlow
+                ? "Still processing — this can take a few seconds. Please do not close this page."
+                : "Processing your transfer…"}
+            </p>
+            {processingSlow && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  submitLockRef.current = false;
+                  setSubmitting(false);
+                  setProcessingSlow(false);
+                  setStep("pin");
+                  setProgress(0);
+                  setStatusMessage("");
+                  setError(
+                    "Transfer cancelled on this screen. Check your account activity before submitting again."
+                  );
+                }}
+              >
+                Cancel and go back
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

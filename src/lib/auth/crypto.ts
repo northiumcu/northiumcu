@@ -2,15 +2,21 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 
 const ALGO = "aes-256-gcm";
 
+let cachedEncryptionKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (cachedEncryptionKey) return cachedEncryptionKey;
+
   const raw = process.env.AUTH_ENCRYPTION_KEY;
   if (!raw || raw.length < 32) {
     if (process.env.NODE_ENV === "production") {
       throw new Error("AUTH_ENCRYPTION_KEY must be set in production (32+ chars).");
     }
-    return scryptSync("northium-dev-only-key", "northium-salt", 32);
+    cachedEncryptionKey = scryptSync("northium-dev-only-key", "northium-salt", 32);
+    return cachedEncryptionKey;
   }
-  return scryptSync(raw, "northium-auth", 32);
+  cachedEncryptionKey = scryptSync(raw, "northium-auth", 32);
+  return cachedEncryptionKey;
 }
 
 export function encryptSensitive(value: string): string {
