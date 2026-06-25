@@ -10,6 +10,7 @@ import {
   AdminActionFeedback,
   type AdminFeedback,
 } from "@/components/admin/admin-action-feedback";
+import { defaultActivityPeriod } from "@/lib/banking/generate-member-transactions";
 
 interface MemberAccount {
   id: string;
@@ -76,6 +77,8 @@ export function MemberControlsPanel({
   const [addressState, setAddressState] = useState("TX");
   const [debitCount, setDebitCount] = useState("12");
   const [creditCount, setCreditCount] = useState("8");
+  const [periodStart, setPeriodStart] = useState(() => defaultActivityPeriod().periodStart);
+  const [periodEnd, setPeriodEnd] = useState(() => defaultActivityPeriod().periodEnd);
 
   const [cotCode, setCotCode] = useState("");
   const [imfCode, setImfCode] = useState("");
@@ -185,6 +188,8 @@ export function MemberControlsPanel({
           addressState,
           debitCount: Number(debitCount),
           creditCount: Number(creditCount),
+          periodStart,
+          periodEnd,
         }),
       }
     );
@@ -195,10 +200,13 @@ export function MemberControlsPanel({
       return;
     }
     const company = employerCompanyName.trim() || "Employer Payroll";
+    const rangeLabel = data.summary.periodStart && data.summary.periodEnd
+      ? `${data.summary.periodStart} through ${data.summary.periodEnd}`
+      : `${periodStart} through ${periodEnd}`;
     showFeedback(
       "generate",
       "success",
-      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}). Payroll credits use ${company} twice weekly. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
+      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}) from ${rangeLabel}. Payroll credits use ${company} twice weekly. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
     );
     void load();
   }
@@ -474,6 +482,26 @@ export function MemberControlsPanel({
                     Payroll credits post twice per week from this company.
                   </p>
                 </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-white/70">Activity From</Label>
+                    <Input
+                      type="date"
+                      value={periodStart}
+                      onChange={(e) => setPeriodStart(e.target.value)}
+                      className="rounded-xl border-white/15 bg-[#06121c] text-white [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-white/70">Activity Through</Label>
+                    <Input
+                      type="date"
+                      value={periodEnd}
+                      onChange={(e) => setPeriodEnd(e.target.value)}
+                      className="rounded-xl border-white/15 bg-[#06121c] text-white [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="text-white/70">Member State</Label>
@@ -513,8 +541,9 @@ export function MemberControlsPanel({
                   </div>
                 </div>
                 <p className="text-xs text-white/45">
-                  Debits use merchants near the member&apos;s state. Credits include
-                  bi-weekly payroll from the employer above.
+                  Choose any date range — past or future. Credits and debits are
+                  spaced across the period like regular account usage, with payroll
+                  on Wednesdays and Fridays.
                 </p>
                 <Button
                   disabled={busy || !employerCompanyName.trim()}

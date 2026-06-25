@@ -3,13 +3,33 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { generateMemberTransactions } from "@/lib/banking/generate-member-transactions";
 
-const generateSchema = z.object({
-  accountId: z.string().uuid(),
-  employerCompanyName: z.string().trim().min(1).max(120),
-  addressState: z.string().trim().max(2).optional(),
-  debitCount: z.number().int().min(0).max(200),
-  creditCount: z.number().int().min(0).max(200),
-});
+const generateSchema = z
+  .object({
+    accountId: z.string().uuid(),
+    employerCompanyName: z.string().trim().min(1).max(120),
+    addressState: z.string().trim().max(2).optional(),
+    debitCount: z.number().int().min(0).max(200),
+    creditCount: z.number().int().min(0).max(200),
+    periodStart: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD for the start date.")
+      .optional(),
+    periodEnd: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD for the end date.")
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.periodStart && value.periodEnd && value.periodStart > value.periodEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Activity period start must be on or before the end date.",
+        path: ["periodEnd"],
+      });
+    }
+  });
 
 export async function POST(
   request: Request,
@@ -69,6 +89,8 @@ export async function POST(
       addressState: input.addressState ?? "TX",
       debitCount: input.debitCount,
       creditCount: input.creditCount,
+      periodStart: input.periodStart ?? "",
+      periodEnd: input.periodEnd ?? "",
     });
 
     const { data: updatedAccount } = await admin
