@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { OtpVerificationForm } from "@/components/auth/otp-verification-form";
 import { MathVerificationField } from "@/components/forms/math-verification-field";
+import { PinInput } from "@/components/forms/pin-input";
+import { formatUSPhoneInput } from "@/lib/format/phone";
 
 export function ApplyForm() {
   const router = useRouter();
@@ -159,46 +161,31 @@ export function ApplyForm() {
                     <Input
                       id="phone"
                       type="tel"
+                      inputMode="numeric"
                       value={form.phone}
-                      onChange={(e) => updateField("phone", e.target.value)}
+                      onChange={(e) =>
+                        updateField("phone", formatUSPhoneInput(e.target.value))
+                      }
+                      placeholder="(555) 555-0100"
                       className="rounded-xl"
                     />
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="pin">Create Account PIN</Label>
-                      <Input
-                        id="pin"
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={form.pin}
-                        onChange={(e) =>
-                          updateField("pin", e.target.value.replace(/\D/g, "").slice(0, 6))
-                        }
-                        className="rounded-xl"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPin">Confirm Account PIN</Label>
-                      <Input
-                        id="confirmPin"
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={form.confirmPin}
-                        onChange={(e) =>
-                          updateField(
-                            "confirmPin",
-                            e.target.value.replace(/\D/g, "").slice(0, 6)
-                          )
-                        }
-                        className="rounded-xl"
-                        required
-                      />
-                    </div>
+                    <PinInput
+                      id="pin"
+                      label="Create Account PIN"
+                      value={form.pin}
+                      onChange={(value) => updateField("pin", value)}
+                      required
+                    />
+                    <PinInput
+                      id="confirmPin"
+                      label="Confirm Account PIN"
+                      value={form.confirmPin}
+                      onChange={(value) => updateField("confirmPin", value)}
+                      required
+                    />
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">

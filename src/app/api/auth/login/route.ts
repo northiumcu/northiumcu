@@ -7,6 +7,7 @@ import { SUSPENDED_MESSAGE } from "@/lib/auth/require-member";
 import { generateOtpCode, hashOtp, verifyPin } from "@/lib/auth/crypto";
 import { loginSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
+import { EmailDeliveryError } from "@/lib/email/config";
 
 export async function POST(request: Request) {
   try {
@@ -82,16 +83,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: otpError?.message }, { status: 500 });
     }
 
-    try {
-      await sendOtpEmail({
-        to: profile.email,
-        code: otp,
-        purpose: "login",
-      });
-    } catch (error) {
-      console.error("[Northium login] OTP email error:", error);
-      console.info(`[Northium OTP] login → ${profile.email}: ${otp}`);
-    }
+    await sendOtpEmail({
+      to: profile.email,
+      code: otp,
+      purpose: "login",
+    });
 
     return NextResponse.json({
       challengeId: challenge.id,
@@ -99,6 +95,15 @@ export async function POST(request: Request) {
       message: "Verification code sent to your email.",
     });
   } catch (error) {
+    if (error instanceof EmailDeliveryError) {
+      return NextResponse.json(
+        {
+          error:
+            "We could not send your verification email. Please try again shortly or contact your account officer.",
+        },
+        { status: 503 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Login failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

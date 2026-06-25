@@ -27,6 +27,7 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: optionalString(),
   AUTH_ENCRYPTION_KEY: optionalString(),
   RESEND_API_KEY: optionalString(),
+  RESEND_FROM_EMAIL: optionalString(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -9,6 +9,7 @@ import {
 export type EmailTemplateId =
   | "otp-login"
   | "otp-signup"
+  | "otp-pin-reset"
   | "contact-internal"
   | "contact-confirmation"
   | "welcome-member";
@@ -49,6 +50,13 @@ export const emailTemplateCatalog: EmailTemplateMeta[] = [
     description: "Sent during membership application before the account is created.",
     trigger: "POST /api/auth/signup",
     sampleData: { code: "719304", recipientName: "Applicant" },
+  },
+  {
+    id: "otp-pin-reset",
+    name: "PIN reset verification",
+    description: "Sent when a member requests to reset their account PIN.",
+    trigger: "POST /api/auth/forgot-pin",
+    sampleData: { code: "305184", recipientName: "Member" },
   },
   {
     id: "contact-internal",
@@ -121,6 +129,29 @@ ${institution.tagline}`;
       <p style="margin:0;color:#667085">After verification you can sign in, complete identity review, and finish opening your accounts.</p>`,
     cta: { label: "Continue application", href: `${institution.productionUrl}/apply` },
     footerNote: "If you did not start a membership application, ignore this email.",
+  });
+
+  return { subject, html, text };
+}
+
+export function buildOtpPinResetEmail(code: string): EmailMessage {
+  const subject = `${institution.shortName} PIN reset verification code`;
+  const text = `Your ${institution.shortName} PIN reset verification code is: ${code}
+
+This code expires in 10 minutes. If you did not request a PIN reset, contact ${institution.supportEmail} immediately.
+
+${institution.name}
+${institution.tagline}`;
+
+  const html = buildEmailLayout({
+    preheader: `Your PIN reset code is ${code}. It expires in 10 minutes.`,
+    eyebrow: "Account security",
+    title: "Reset your account PIN",
+    bodyHtml: `<p style="margin:0 0 12px">Use this one-time verification code to reset your Northium account PIN.</p>
+      ${codeBlock(code)}
+      <p style="margin:0;color:#667085">After you enter this code you can choose a new 6-digit PIN and sign in.</p>`,
+    cta: { label: "Go to sign in", href: `${institution.productionUrl}/sign-in` },
+    footerNote: "Never share this code. Northium will never ask for it by phone or text.",
   });
 
   return { subject, html, text };
@@ -222,6 +253,8 @@ export function renderEmailTemplate(
       return buildOtpLoginEmail(data.code ?? "000000");
     case "otp-signup":
       return buildOtpSignupEmail(data.code ?? "000000");
+    case "otp-pin-reset":
+      return buildOtpPinResetEmail(data.code ?? "000000");
     case "contact-internal":
       return buildContactInternalEmail({
         name: data.name ?? "Member",

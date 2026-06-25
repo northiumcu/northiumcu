@@ -1,8 +1,11 @@
 import {
   buildOtpLoginEmail,
+  buildOtpPinResetEmail,
   buildOtpSignupEmail,
 } from "@/lib/email/templates/catalog";
 import { sendResendEmail } from "@/lib/email/resend";
+
+export type OtpEmailPurpose = "login" | "signup" | "pin_reset";
 
 export async function sendOtpEmail({
   to,
@@ -11,22 +14,19 @@ export async function sendOtpEmail({
 }: {
   to: string;
   code: string;
-  purpose: "login" | "signup";
+  purpose: OtpEmailPurpose;
 }) {
   const message =
     purpose === "login"
       ? buildOtpLoginEmail(code)
-      : buildOtpSignupEmail(code);
+      : purpose === "signup"
+        ? buildOtpSignupEmail(code)
+        : buildOtpPinResetEmail(code);
 
-  try {
-    await sendResendEmail({
-      to,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
-  } catch (error) {
-    console.error("[Northium OTP] Email delivery failed:", error);
-    console.info(`[Northium OTP] ${purpose} → ${to}: ${code}`);
-  }
+  await sendResendEmail({
+    to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
 }

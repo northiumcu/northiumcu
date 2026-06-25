@@ -10,6 +10,7 @@ import {
 import { accountTypesWithSavings } from "@/lib/auth/membership-options";
 import { signupSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
+import { EmailDeliveryError } from "@/lib/email/config";
 import { verifyMathChallenge } from "@/lib/security/human-check";
 
 export async function POST(request: Request) {
@@ -109,6 +110,15 @@ export async function POST(request: Request) {
       message: "Verification code sent to your email.",
     });
   } catch (error) {
+    if (error instanceof EmailDeliveryError) {
+      return NextResponse.json(
+        {
+          error:
+            "We could not send your verification email. Please try again in a moment or contact helpdesk@northiumcu.com.",
+        },
+        { status: 503 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Signup failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

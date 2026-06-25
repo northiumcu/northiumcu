@@ -63,7 +63,16 @@ export const signupSchema = z
     email: z.string().email(),
     firstName: z.string().min(1).max(80),
     lastName: z.string().min(1).max(80),
-    phone: z.string().min(7).max(20).optional(),
+    phone: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const digits = (value ?? "").replace(/\D/g, "");
+        return digits.length > 0 ? digits : undefined;
+      })
+      .refine((value) => value === undefined || value.length === 10, {
+        message: "Phone number must be 10 digits.",
+      }),
     pin: pinSchema,
     confirmPin: pinSchema,
     eligibilityCategory: z.string().min(1).max(120),
@@ -130,6 +139,22 @@ export const otpVerifySchema = z.object({
   challengeId: z.string().uuid(),
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
 });
+
+export const forgotPinSchema = z.object({
+  username: usernameSchema,
+});
+
+export const resetPinSchema = z
+  .object({
+    challengeId: z.string().uuid(),
+    code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
+    newPin: pinSchema,
+    confirmPin: pinSchema,
+  })
+  .refine((data) => data.newPin === data.confirmPin, {
+    message: "PINs do not match.",
+    path: ["confirmPin"],
+  });
 
 export const transferCreateSchema = z.object({
   sourceAccountId: z.string().uuid(),
