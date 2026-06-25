@@ -37,6 +37,7 @@ export default function SignInContent() {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [emailLabel, setEmailLabel] = useState("");
 
+  const [usernameRecoverySent, setUsernameRecoverySent] = useState(false);
   const [forgotChallengeId, setForgotChallengeId] = useState<string | null>(null);
   const [forgotEmail, setForgotEmail] = useState("");
   const [resetCode, setResetCode] = useState("");
@@ -97,6 +98,7 @@ export default function SignInContent() {
         ? data.message
         : "If an account exists for that email, we sent your username."
     );
+    setUsernameRecoverySent(true);
   }
 
   async function handleForgotPinRequest(event: React.FormEvent) {
@@ -172,6 +174,7 @@ export default function SignInContent() {
     setView("login");
     setError(null);
     setSuccess(null);
+    setUsernameRecoverySent(false);
   }
 
   const title = challengeId
@@ -257,6 +260,7 @@ export default function SignInContent() {
                         setView("forgot-username");
                         setError(null);
                         setSuccess(null);
+                        setUsernameRecoverySent(false);
                       }}
                     >
                       Recover Username
@@ -283,6 +287,20 @@ export default function SignInContent() {
                     </Button>
                   </div>
                 ) : view === "forgot-username" ? (
+                  usernameRecoverySent ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-northium-success" role="status">
+                        {success}
+                      </p>
+                      <Button
+                        type="button"
+                        className="w-full bg-northium-primary hover:bg-northium-secondary"
+                        onClick={backToLogin}
+                      >
+                        Back to Sign In
+                      </Button>
+                    </div>
+                  ) : (
                   <form onSubmit={handleForgotUsername} className="space-y-4">
                     <p className="text-sm text-northium-muted">
                       Enter the email on your membership account and we&apos;ll
@@ -305,11 +323,6 @@ export default function SignInContent() {
                         {error}
                       </p>
                     )}
-                    {success && (
-                      <p className="text-sm text-northium-success" role="status">
-                        {success}
-                      </p>
-                    )}
                     <Button
                       type="submit"
                       disabled={loading || !recoveryEmail.trim()}
@@ -324,11 +337,13 @@ export default function SignInContent() {
                       onClick={() => {
                         setView("forgot-choice");
                         setError(null);
+                        setUsernameRecoverySent(false);
                       }}
                     >
                       Back
                     </Button>
                   </form>
+                  )
                 ) : view === "forgot-pin" ? (
                   <form onSubmit={handleForgotPinRequest} className="space-y-4">
                     <p className="text-sm text-northium-muted">
