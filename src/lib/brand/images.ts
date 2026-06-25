@@ -12,16 +12,16 @@ export interface BankingPhoto {
 
 export const bankingImages: Record<VisualKey, BankingPhoto> = {
   hero: {
-    src: "/images/banking/hero.webp",
-    alt: "Modern glass institutional building at dusk",
+    src: "/images/banking/bank-hall.webp",
+    alt: "Northium Credit Union branch with members and staff throughout the hall",
   },
   institution: {
     src: "/images/banking/bank-hall.webp",
     alt: "Northium Credit Union branch with members and staff throughout the hall",
   },
   institutionHero: {
-    src: "/images/banking/teller-service.webp",
-    alt: "Member services team reviewing accounts at a consultation desk",
+    src: "/images/banking/bank-hall.webp",
+    alt: "Northium Credit Union branch with members and staff throughout the hall",
   },
   accounts: {
     src: "/images/banking/accounts.webp",
