@@ -6,6 +6,7 @@ import {
   FileText,
   Landmark,
   PiggyBank,
+  ScrollText,
   Sparkles,
   Wallet,
 } from "lucide-react";
@@ -59,6 +60,13 @@ export const quickActions = [
     description: "Move money securely",
     gradient: "from-northium-primary to-sky-700",
     icon: ArrowLeftRight,
+  },
+  {
+    href: "/member/bill-pay",
+    label: "Bill Pay",
+    description: "Pay saved payees",
+    gradient: "from-rose-600 to-orange-600",
+    icon: ScrollText,
   },
   {
     href: "/member/cards",

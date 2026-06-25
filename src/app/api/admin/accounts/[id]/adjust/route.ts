@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
+import { buildTransactionReference } from "@/lib/banking/transaction-reference";
 
 const adjustSchema = z.object({
   direction: z.enum(["credit", "debit"]),
@@ -39,7 +40,7 @@ export async function POST(
       direction,
       type: "adjustment",
       description: label,
-      reference: `ADMIN-${Date.now()}`,
+      reference: buildTransactionReference(),
     });
 
     return NextResponse.json(result);

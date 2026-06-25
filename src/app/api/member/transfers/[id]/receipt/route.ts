@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildTransferReceiptPdf } from "@/lib/banking/pdf-documents";
+import { buildTransferReference } from "@/lib/banking/transaction-reference";
 
 export async function GET(
   _request: Request,
@@ -52,7 +53,7 @@ export async function GET(
       .single();
 
     const pdf = await buildTransferReceiptPdf({
-      reference: `TRF-${transfer.id.slice(0, 8).toUpperCase()}`,
+      reference: buildTransferReference(transfer.id),
       memberName: `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim(),
       accountMask: sourceAccount ? `••••${sourceAccount.account_number.slice(-4)}` : "—",
       type: transfer.type,

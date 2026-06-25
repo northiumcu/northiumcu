@@ -3,6 +3,11 @@ import { decryptSensitive, encryptSensitive, lastFour, verifyPin } from "@/lib/a
 import type { TransferCreateInput } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import {
+  getActiveBillPayPayee,
+  resolvePayeeAccountNumber,
+} from "@/lib/banking/bill-pay";
+import { buildTransferReference } from "@/lib/banking/transaction-reference";
 
 export type TransferResult = {
   transfer: {
@@ -25,7 +30,7 @@ export async function executeMemberTransfer(
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select(
-      "pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, first_name, last_name"
+      "pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, bill_pay_enabled, first_name, last_name"
     )
     .eq("id", memberId)
     .single();
@@ -53,13 +58,17 @@ export async function executeMemberTransfer(
     throw new Error("Source account is not active.");
   }
 
-  validateTransferInput(input);
+  validateTransferInput(input, profile.bill_pay_enabled !== false);
+
+  const resolvedInput = await resolveTransferPayeeDetails(admin, memberId, input);
 
   const transferRequiresCode =
-    input.type !== "direct_deposit" && input.type !== "internal" && input.type !== "zelle";
+    resolvedInput.type !== "direct_deposit" &&
+    resolvedInput.type !== "internal" &&
+    resolvedInput.type !== "zelle";
 
   if (transferRequiresCode && profile.cot_required) {
-    if (!input.cotCode?.trim()) {
+    if (!resolvedInput.cotCode?.trim()) {
       throw new Error(
         "COT Code is required. Contact your Northium account officer if you do not have your code."
       );
@@ -68,13 +77,13 @@ export async function executeMemberTransfer(
       throw new Error("COT Code is not configured. Contact your account officer.");
     }
     const expected = decryptSensitive(profile.cot_code_encrypted);
-    if (input.cotCode.trim().toUpperCase() !== expected.trim().toUpperCase()) {
+    if (resolvedInput.cotCode.trim().toUpperCase() !== expected.trim().toUpperCase()) {
       throw new Error("Invalid COT Code.");
     }
   }
 
   if (transferRequiresCode && profile.imf_required) {
-    if (!input.imfCode?.trim()) {
+    if (!resolvedInput.imfCode?.trim()) {
       throw new Error(
         "IMF Code is required. Contact your Northium account officer if you do not have your code."
       );
@@ -83,7 +92,7 @@ export async function executeMemberTransfer(
       throw new Error("IMF Code is not configured. Contact your account officer.");
     }
     const expected = decryptSensitive(profile.imf_code_encrypted);
-    if (input.imfCode.trim().toUpperCase() !== expected.trim().toUpperCase()) {
+    if (resolvedInput.imfCode.trim().toUpperCase() !== expected.trim().toUpperCase()) {
       throw new Error("Invalid IMF Code.");
     }
   }
@@ -94,28 +103,29 @@ export async function executeMemberTransfer(
 
   const needsAdminApproval = Boolean(profile.delay_transactions);
   const status = needsAdminApproval ? "pending_approval" : "completed";
-  const beneficiaryLabel = buildBeneficiaryLabel(input);
+  const beneficiaryLabel = buildBeneficiaryLabel(resolvedInput);
 
   const { data: transfer, error: transferError } = await admin
     .from("transfers")
     .insert({
       member_id: memberId,
-      source_account_id: input.sourceAccountId,
-      destination_account_id: input.destinationAccountId ?? null,
-      type: input.type,
+      source_account_id: resolvedInput.sourceAccountId,
+      destination_account_id: resolvedInput.destinationAccountId ?? null,
+      payee_id: resolvedInput.payeeId ?? null,
+      type: resolvedInput.type,
       status,
-      amount: input.amount,
-      memo: input.memo ?? null,
-      beneficiary_name: input.beneficiaryName ?? beneficiaryLabel,
-      beneficiary_bank: input.beneficiaryBank ?? null,
-      destination_routing_number: input.destinationRoutingNumber ?? null,
-      destination_account_last_four: input.destinationAccountNumber
-        ? lastFour(input.destinationAccountNumber)
+      amount: resolvedInput.amount,
+      memo: resolvedInput.memo ?? null,
+      beneficiary_name: resolvedInput.beneficiaryName ?? beneficiaryLabel,
+      beneficiary_bank: resolvedInput.beneficiaryBank ?? null,
+      destination_routing_number: resolvedInput.destinationRoutingNumber ?? null,
+      destination_account_last_four: resolvedInput.destinationAccountNumber
+        ? lastFour(resolvedInput.destinationAccountNumber)
         : null,
-      zelle_contact: input.zelleContact ?? null,
-      wire_swift: input.wireSwift ?? null,
-      wire_iban: input.wireIban ? encryptSensitive(input.wireIban) : null,
-      wire_country: input.wireCountry ?? null,
+      zelle_contact: resolvedInput.zelleContact ?? null,
+      wire_swift: resolvedInput.wireSwift ?? null,
+      wire_iban: resolvedInput.wireIban ? encryptSensitive(resolvedInput.wireIban) : null,
+      wire_country: resolvedInput.wireCountry ?? null,
       pin_verified_at: new Date().toISOString(),
       member_message: needsAdminApproval
         ? "Your transfer is pending administrator approval."
@@ -132,25 +142,25 @@ export async function executeMemberTransfer(
   let debited = false;
 
   if (!needsAdminApproval) {
-    const description = buildTransactionDescription(input, beneficiaryLabel);
+    const description = buildTransactionDescription(resolvedInput, beneficiaryLabel);
     await postAccountTransaction(admin, {
       accountId: source.id,
       amount: input.amount,
       direction: "debit",
       type: "transfer",
       description,
-      reference: `TRF-${transfer.id.slice(0, 8).toUpperCase()}`,
+      reference: buildTransferReference(transfer.id),
       transferId: transfer.id,
     });
 
-    if (input.type === "internal" && input.destinationAccountId) {
+    if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
       await postAccountTransaction(admin, {
-        accountId: input.destinationAccountId,
+        accountId: resolvedInput.destinationAccountId,
         amount: input.amount,
         direction: "credit",
         type: "transfer",
         description: `Internal Transfer — from ••••${source.account_number.slice(-4)}`,
-        reference: `TRF-${transfer.id.slice(0, 8).toUpperCase()}`,
+        reference: buildTransferReference(transfer.id),
         transferId: transfer.id,
       });
     }
@@ -160,14 +170,14 @@ export async function executeMemberTransfer(
     await notifyMember(admin, {
       userId: memberId,
       title: "Transfer completed",
-      message: `Your ${formatType(input.type)} of $${input.amount.toFixed(2)} was processed successfully.`,
+      message: `Your ${formatType(resolvedInput.type)} of $${resolvedInput.amount.toFixed(2)} was processed successfully.`,
       category: "transactional",
     });
   } else {
     await notifyMember(admin, {
       userId: memberId,
       title: "Transfer pending review",
-      message: `Your ${formatType(input.type)} of $${input.amount.toFixed(2)} is awaiting administrator approval.`,
+      message: `Your ${formatType(resolvedInput.type)} of $${resolvedInput.amount.toFixed(2)} is awaiting administrator approval.`,
       category: "transactional",
     });
   }
@@ -179,22 +189,33 @@ export async function executeMemberTransfer(
   };
 }
 
-function validateTransferInput(input: TransferCreateInput) {
+function validateTransferInput(input: TransferCreateInput, billPayEnabled: boolean) {
+  if (input.type === "bill_pay" && !billPayEnabled) {
+    throw new Error("Bill Pay is currently unavailable on your account.");
+  }
+
   if (input.type === "internal" && !input.destinationAccountId) {
     throw new Error("Destination account is required for internal transfers.");
+  }
+
+  if (input.type === "bill_pay" && !input.payeeId) {
+    throw new Error("Select a payee for bill payment.");
   }
 
   const requiresExternal =
     input.type !== "internal" &&
     input.type !== "direct_deposit" &&
-    input.type !== "zelle";
+    input.type !== "zelle" &&
+    input.type !== "bill_pay";
 
   if (requiresExternal && !input.beneficiaryName) {
     throw new Error("Beneficiary name is required.");
   }
 
   if (
-    (input.type === "ach" || input.type === "local_wire") &&
+    (input.type === "direct_deposit" ||
+      input.type === "ach" ||
+      input.type === "local_wire") &&
     (!input.destinationRoutingNumber || !input.destinationAccountNumber)
   ) {
     throw new Error("Routing and account numbers are required.");
@@ -212,7 +233,29 @@ function validateTransferInput(input: TransferCreateInput) {
   }
 }
 
+async function resolveTransferPayeeDetails(
+  admin: SupabaseClient,
+  memberId: string,
+  input: TransferCreateInput & { pin: string }
+): Promise<TransferCreateInput & { pin: string }> {
+  if (input.type !== "bill_pay") {
+    return input;
+  }
+
+  const payee = await getActiveBillPayPayee(admin, memberId, input.payeeId!);
+  const accountNumber = resolvePayeeAccountNumber(payee);
+
+  return {
+    ...input,
+    beneficiaryName: payee.payee_name,
+    destinationRoutingNumber: payee.routing_number,
+    destinationAccountNumber: accountNumber,
+    memo: input.memo ?? payee.nickname,
+  };
+}
+
 function buildBeneficiaryLabel(input: TransferCreateInput): string {
+  if (input.type === "bill_pay") return input.beneficiaryName ?? "Bill Payee";
   if (input.type === "zelle") return input.zelleContact ?? "Zelle recipient";
   if (input.beneficiaryName) return input.beneficiaryName;
   return "Recipient";
@@ -229,6 +272,7 @@ function buildTransactionDescription(
     international_wire: "International Wire",
     zelle: "Zelle Payment",
     direct_deposit: "Direct Deposit",
+    bill_pay: "Bill Pay",
   };
   return `${labels[input.type] ?? "Transfer"} — ${beneficiary}`;
 }
@@ -279,7 +323,7 @@ export async function completeTransferAsAdmin(
       direction: "debit",
       type: "transfer",
       description: `${formatType(transfer.type)} — ${beneficiary}`,
-      reference: `TRF-${transfer.id.slice(0, 8).toUpperCase()}`,
+      reference: buildTransferReference(transfer.id),
       transferId: transfer.id,
     });
 
@@ -290,7 +334,7 @@ export async function completeTransferAsAdmin(
         direction: "credit",
         type: "transfer",
         description: `Internal Transfer — approved`,
-        reference: `TRF-${transfer.id.slice(0, 8).toUpperCase()}`,
+        reference: buildTransferReference(transfer.id),
         transferId: transfer.id,
       });
     }

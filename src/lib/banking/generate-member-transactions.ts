@@ -77,7 +77,6 @@ export async function generateMemberTransactions(
       direction: "credit",
       type: "deposit",
       description: `Direct Deposit — ${company}`,
-      reference: `PAYROLL-${postedAt.toISOString().slice(0, 10)}`,
       postedAt,
     });
     summary.credits += 1;

@@ -199,10 +199,12 @@ export const transferCreateSchema = z.object({
     "local_wire",
     "international_wire",
     "zelle",
+    "bill_pay",
   ]),
   amount: z.number().positive().max(1_000_000),
   memo: z.string().max(200).optional(),
   destinationAccountId: z.string().uuid().optional(),
+  payeeId: z.string().uuid().optional(),
   beneficiaryName: z.string().max(120).optional(),
   beneficiaryBank: z.string().max(120).optional(),
   destinationRoutingNumber: z.string().max(20).optional(),
@@ -214,6 +216,20 @@ export const transferCreateSchema = z.object({
   cotCode: z.string().max(32).optional(),
   imfCode: z.string().max(32).optional(),
   pin: pinSchema,
+});
+
+export const billPayPayeeSchema = z.object({
+  nickname: z.string().trim().min(1).max(60),
+  payeeName: z.string().trim().min(1).max(120),
+  routingNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{9}$/, "Routing number must be 9 digits."),
+  accountNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{4,17}$/, "Account number must be 4 to 17 digits."),
+  category: z.string().trim().max(60).optional(),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

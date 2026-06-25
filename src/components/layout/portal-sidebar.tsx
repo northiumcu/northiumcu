@@ -15,6 +15,7 @@ import {
   User,
   Users,
   Wallet,
+  ScrollText,
 } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
 import { cn } from "@/lib/utils";
@@ -32,12 +33,14 @@ export const iconMap = {
   users: Users,
   "bar-chart-3": BarChart3,
   settings: Settings,
+  "scroll-text": ScrollText,
 } as const;
 
 const navAccent: Record<string, string> = {
   "/member": "from-sky-400/30 to-blue-500/10 text-sky-200",
   "/member/accounts": "from-emerald-400/30 to-teal-500/10 text-emerald-200",
   "/member/transfers": "from-amber-400/30 to-orange-500/10 text-amber-200",
+  "/member/bill-pay": "from-rose-400/30 to-pink-500/10 text-rose-200",
   "/member/cards": "from-violet-400/30 to-purple-500/10 text-violet-200",
   "/member/statements": "from-cyan-400/30 to-sky-500/10 text-cyan-200",
   "/member/loans": "from-rose-400/30 to-pink-500/10 text-rose-200",

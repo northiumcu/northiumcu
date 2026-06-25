@@ -16,13 +16,14 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("cot_required, imf_required")
+      .select("cot_required, imf_required, bill_pay_enabled")
       .eq("id", user.id)
       .single();
 
     return NextResponse.json({
       cotRequired: profile?.cot_required ?? false,
       imfRequired: profile?.imf_required ?? false,
+      billPayEnabled: profile?.bill_pay_enabled !== false,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed.";

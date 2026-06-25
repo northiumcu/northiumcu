@@ -12,5 +12,6 @@ export type PortalNavItem = {
     | "shield"
     | "users"
     | "bar-chart-3"
-    | "settings";
+    | "settings"
+    | "scroll-text";
 };

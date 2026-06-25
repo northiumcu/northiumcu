@@ -12,6 +12,7 @@ export const memberNav = [
   { label: "Dashboard", href: "/member", icon: "layout-dashboard" },
   { label: "Accounts", href: "/member/accounts", icon: "wallet" },
   { label: "Transfers", href: "/member/transfers", icon: "arrow-left-right" },
+  { label: "Bill Pay", href: "/member/bill-pay", icon: "scroll-text" },
   { label: "Cards", href: "/member/cards", icon: "credit-card" },
   { label: "Statements", href: "/member/statements", icon: "file-text" },
   { label: "Loans", href: "/member/loans", icon: "landmark" },

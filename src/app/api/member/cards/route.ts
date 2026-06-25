@@ -107,7 +107,6 @@ export async function POST(request: Request) {
       direction: "debit",
       type: "fee",
       description: "Northium Mastercard — application & delivery fee",
-      reference: `CARD-FEE-${Date.now()}`,
     });
 
     const lastFour = randomLastFour();

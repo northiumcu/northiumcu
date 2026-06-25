@@ -26,6 +26,7 @@ interface MemberRecord {
   employer_company_name: string | null;
   address_state: string | null;
   delay_transactions: boolean;
+  bill_pay_enabled: boolean;
   cot_required: boolean;
   imf_required: boolean;
   has_cot_code?: boolean;
@@ -67,6 +68,7 @@ export function MemberControlsPanel({
   const [cotRequired, setCotRequired] = useState(false);
   const [imfRequired, setImfRequired] = useState(false);
   const [delayTransactions, setDelayTransactions] = useState(false);
+  const [billPayEnabled, setBillPayEnabled] = useState(true);
 
   const selected = useMemo(
     () => members.find((m) => m.id === selectedId) ?? null,
@@ -100,6 +102,7 @@ export function MemberControlsPanel({
     setCotRequired(selected.cot_required);
     setImfRequired(selected.imf_required);
     setDelayTransactions(selected.delay_transactions);
+    setBillPayEnabled(selected.bill_pay_enabled !== false);
     setCotCode("");
     setImfCode("");
     const firstAccount = selected.accounts?.[0];
@@ -537,6 +540,47 @@ export function MemberControlsPanel({
                 }
               >
                 {delayTransactions ? "DELAY TRANSACTION — ON" : "DELAY TRANSACTION — OFF"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-white/10 bg-[#0f2233] text-white shadow-none">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg">Bill Pay</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-white/55">
+                When disabled, this member cannot add payees or submit bill
+                payments from the member portal.
+              </p>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (!selected) return;
+                  const next = !billPayEnabled;
+                  setBillPayEnabled(next);
+                  setBusy(true);
+                  await fetch(`/api/admin/members/${selected.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ billPayEnabled: next }),
+                  });
+                  setBusy(false);
+                  setMessage(
+                    next
+                      ? "Bill Pay is ON for this member."
+                      : "Bill Pay is OFF for this member."
+                  );
+                  void load();
+                }}
+                className={
+                  billPayEnabled
+                    ? "w-full bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+                    : "w-full bg-red-500/90 text-white hover:bg-red-500"
+                }
+              >
+                {billPayEnabled ? "BILL PAY — ON" : "BILL PAY — OFF"}
               </Button>
             </CardContent>
           </Card>

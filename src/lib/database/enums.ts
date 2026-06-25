@@ -94,6 +94,7 @@ export const TRANSFER_TYPES = [
   "local_wire",
   "international_wire",
   "zelle",
+  "bill_pay",
 ] as const;
 
 export type TransferType = (typeof TRANSFER_TYPES)[number];

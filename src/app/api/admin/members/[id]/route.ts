@@ -15,6 +15,7 @@ const updateMemberSchema = z.object({
   cotRequired: z.boolean().optional(),
   imfRequired: z.boolean().optional(),
   delayTransactions: z.boolean().optional(),
+  billPayEnabled: z.boolean().optional(),
 });
 
 export async function GET(
@@ -105,6 +106,9 @@ export async function PATCH(
     if (input.delayTransactions !== undefined) {
       updates.delay_transactions = input.delayTransactions;
     }
+    if (input.billPayEnabled !== undefined) {
+      updates.bill_pay_enabled = input.billPayEnabled;
+    }
     if (input.cotCode !== undefined) {
       const trimmed = input.cotCode.trim();
       updates.cot_code_encrypted = trimmed ? encryptSensitive(trimmed) : null;
@@ -120,7 +124,7 @@ export async function PATCH(
       .eq("id", id)
       .eq("staff_role", "member")
       .select(
-        "id, employer_company_name, address_state, cot_required, imf_required, delay_transactions"
+        "id, employer_company_name, address_state, cot_required, imf_required, delay_transactions, bill_pay_enabled"
       )
       .single();
 

@@ -19,7 +19,7 @@ interface Account {
 
 const transferTypes = [
   { value: "internal", label: "Internal Transfer" },
-  { value: "ach", label: "ACH" },
+  { value: "direct_deposit", label: "Direct Deposit" },
   { value: "local_wire", label: "Local Wire Transfer" },
   { value: "international_wire", label: "International Wire Transfer" },
   { value: "zelle", label: "Zelle" },
@@ -40,7 +40,7 @@ function transferRequiresSecurityCodes(transferType: string) {
 
 export function TransferFlow() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [type, setType] = useState<string>("ach");
+  const [type, setType] = useState<string>("direct_deposit");
   const [sourceAccountId, setSourceAccountId] = useState("");
   const [destinationAccountId, setDestinationAccountId] = useState("");
   const [amount, setAmount] = useState("");
@@ -306,7 +306,7 @@ export function TransferFlow() {
                     />
                   </div>
                 )}
-                {(type === "ach" || type === "local_wire") && (
+                {(type === "direct_deposit" || type === "local_wire") && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Routing Number</Label>

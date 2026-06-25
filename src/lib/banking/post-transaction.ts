@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TransactionType } from "@/lib/database/enums";
+import { buildTransactionReference } from "@/lib/banking/transaction-reference";
 
 type PostDirection = "credit" | "debit";
 
@@ -61,7 +62,7 @@ export async function postAccountTransaction(
       type: txType,
       status: "posted",
       description: input.description,
-      reference: input.reference ?? null,
+      reference: input.reference ?? buildTransactionReference(),
       transfer_id: input.transferId ?? null,
       posted_at: postedAt,
     })
