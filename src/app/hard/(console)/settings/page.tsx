@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { StaffPasswordForm } from "@/components/auth/staff-password-form";
+import { AdminEmailSettingsPanel } from "@/components/admin/admin-email-settings-panel";
 import { institution } from "@/lib/institution";
 
 export default function AdminSettingsPage() {
@@ -29,6 +30,17 @@ export default function AdminSettingsPage() {
             password you do not reuse elsewhere.
           </p>
           <StaffPasswordForm variant="admin" />
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl border-white/10 bg-[#0f2233] text-white shadow-none">
+        <CardHeader>
+          <CardTitle className="font-heading text-lg text-white">
+            Email delivery
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AdminEmailSettingsPanel />
         </CardContent>
       </Card>
 
