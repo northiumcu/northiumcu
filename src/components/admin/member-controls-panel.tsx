@@ -162,7 +162,7 @@ export function MemberControlsPanel({
       return;
     }
     setMessage(
-      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}). Payroll credits use ${employerCompanyName} twice weekly.`
+      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}). Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
     );
     void load();
   }
