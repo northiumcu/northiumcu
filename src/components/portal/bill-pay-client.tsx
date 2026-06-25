@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
+import { AmountInput } from "@/components/forms/amount-input";
 import type { BillPayPayeeView } from "@/lib/banking/bill-pay";
-import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
-import { formatCurrency } from "@/lib/format/currency";
+import { TRANSACTION_INCOMPLETE_TITLE } from "@/lib/banking/transfer-pause";
+import { formatCurrency, parseAmountInput } from "@/lib/format/currency";
 
 interface Account {
   id: string;
@@ -19,12 +20,11 @@ interface Account {
   available_balance: number;
 }
 
-type View = "pay" | "payees" | "success";
+type View = "pay" | "payees" | "success" | "failed";
 
 const emptyPayeeForm = {
   nickname: "",
   payeeName: "",
-  routingNumber: "",
   accountNumber: "",
   category: "",
 };
@@ -50,6 +50,7 @@ export function BillPayClient() {
   const [cotCode, setCotCode] = useState("");
   const [imfCode, setImfCode] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [failureTitle, setFailureTitle] = useState(TRANSACTION_INCOMPLETE_TITLE);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,7 +131,8 @@ export function BillPayClient() {
 
   async function handlePayBill(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedPayeeId || !sourceAccountId || !amount) {
+    const parsedAmount = parseAmountInput(amount);
+    if (!selectedPayeeId || !sourceAccountId || !amount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError("Select a payee, account, and amount.");
       return;
     }
@@ -145,7 +147,7 @@ export function BillPayClient() {
         sourceAccountId,
         type: "bill_pay",
         payeeId: selectedPayeeId,
-        amount: Number(amount),
+        amount: parseAmountInput(amount),
         memo: memo || undefined,
         cotCode: cotRequired ? cotCode : undefined,
         imfCode: imfRequired ? imfCode : undefined,
@@ -155,7 +157,18 @@ export function BillPayClient() {
     const data = await response.json();
     setBusy(false);
 
+    if (data.transferPaused && typeof data.message === "string") {
+      setFailureTitle(TRANSACTION_INCOMPLETE_TITLE);
+      setStatusMessage(data.message);
+      setPin("");
+      setCotCode("");
+      setImfCode("");
+      setView("failed");
+      return;
+    }
+
     if (!response.ok) {
+      setFailureTitle(TRANSACTION_INCOMPLETE_TITLE);
       setError(typeof data.error === "string" ? data.error : "Payment failed.");
       return;
     }
@@ -231,6 +244,29 @@ export function BillPayClient() {
         >
           {error ?? message}
         </div>
+      )}
+
+      {view === "failed" && (
+        <Card className="rounded-2xl border-amber-200 bg-gradient-to-br from-white to-amber-50 py-10 text-center shadow-sm">
+          <CardContent className="space-y-4">
+            <div>
+              <h2 className="font-heading text-xl font-bold text-northium-primary">
+                {failureTitle}
+              </h2>
+              <p className="mt-2 text-sm text-northium-muted">{statusMessage}</p>
+            </div>
+            <Button
+              onClick={() => {
+                setView("pay");
+                setStatusMessage("");
+                setError(null);
+              }}
+              className="bg-northium-primary hover:bg-northium-secondary"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {view === "success" && (
@@ -314,13 +350,9 @@ export function BillPayClient() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Amount</Label>
-                    <Input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                    <AmountInput
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="rounded-xl"
+                      onChange={setAmount}
                       required
                     />
                   </div>
@@ -409,7 +441,7 @@ export function BillPayClient() {
                       <p className="font-medium text-northium-primary">{payee.nickname}</p>
                       <p className="text-sm text-northium-muted">{payee.payeeName}</p>
                       <p className="mt-1 text-xs text-northium-muted">
-                        Routing {payee.routingNumber} · Acct ••••{payee.accountLastFour}
+                        Acct ••••{payee.accountLastFour}
                       </p>
                     </div>
                     <Button
@@ -459,38 +491,20 @@ export function BillPayClient() {
                     required
                   />
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Routing Number</Label>
-                    <Input
-                      inputMode="numeric"
-                      maxLength={9}
-                      value={payeeForm.routingNumber}
-                      onChange={(e) =>
-                        setPayeeForm((current) => ({
-                          ...current,
-                          routingNumber: sanitizeRoutingNumberInput(e.target.value),
-                        }))
-                      }
-                      className="rounded-xl"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Account Number</Label>
-                    <Input
-                      inputMode="numeric"
-                      value={payeeForm.accountNumber}
-                      onChange={(e) =>
-                        setPayeeForm((current) => ({
-                          ...current,
-                          accountNumber: e.target.value.replace(/\D/g, "").slice(0, 17),
-                        }))
-                      }
-                      className="rounded-xl"
-                      required
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label>Account Number</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={payeeForm.accountNumber}
+                    onChange={(e) =>
+                      setPayeeForm((current) => ({
+                        ...current,
+                        accountNumber: e.target.value.replace(/\D/g, "").slice(0, 17),
+                      }))
+                    }
+                    className="rounded-xl"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Category (optional)</Label>

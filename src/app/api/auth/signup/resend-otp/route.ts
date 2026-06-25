@@ -12,9 +12,13 @@ import {
   resolveSignupStatus,
   signupOtpExpiresAt,
 } from "@/lib/auth/signup-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:signup-resend-otp", 8, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = signupResendSchema.safeParse(body);
     if (!parsed.success) {

@@ -7,9 +7,13 @@ import {
   STAFF_LOGIN_EMAIL,
 } from "@/lib/auth/admin-paths";
 import { staffLoginSchema } from "@/lib/auth/validators";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:staff-login", 10, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = staffLoginSchema.safeParse(body);
     if (!parsed.success) {

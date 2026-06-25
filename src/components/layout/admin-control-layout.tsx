@@ -1,5 +1,6 @@
 import { AdminControlSidebar } from "@/components/layout/admin-control-sidebar";
 import { AdminControlMobileNav } from "@/components/layout/admin-control-mobile-nav";
+import { InactivityLogout } from "@/components/auth/inactivity-logout";
 import type { PortalNavItem } from "@/components/layout/portal-nav-shared";
 
 interface AdminControlLayoutProps {
@@ -10,6 +11,7 @@ interface AdminControlLayoutProps {
 export function AdminControlLayout({ children, nav }: AdminControlLayoutProps) {
   return (
     <div className="flex min-h-screen bg-[#0b1824] text-white">
+      <InactivityLogout />
       <AdminControlSidebar nav={nav} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AdminControlMobileNav nav={nav} />

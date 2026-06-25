@@ -1,7 +1,6 @@
 import type { Account } from "@/types/database";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowLeftRight,
   CreditCard,
   FileText,
   Landmark,
@@ -51,16 +50,15 @@ export const accountTypeTheme: Record<
     icon: Landmark,
     accent: "text-indigo-100",
   },
+  loan: {
+    label: "Loan Disbursement",
+    gradient: "from-amber-600 via-orange-600 to-rose-600",
+    icon: Landmark,
+    accent: "text-amber-100",
+  },
 };
 
 export const quickActions = [
-  {
-    href: "/member/transfers",
-    label: "Transfer Funds",
-    description: "Move money securely",
-    gradient: "from-northium-primary to-sky-700",
-    icon: ArrowLeftRight,
-  },
   {
     href: "/member/bill-pay",
     label: "Bill Pay",

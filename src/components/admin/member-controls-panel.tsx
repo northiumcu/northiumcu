@@ -11,12 +11,19 @@ import {
   type AdminFeedback,
 } from "@/components/admin/admin-action-feedback";
 import {
+  adminButtonDanger,
+  adminButtonNeutral,
+  adminButtonPrimary,
+  adminButtonWarning,
+} from "@/components/admin/admin-button-styles";
+import {
   defaultActivityPeriod,
   defaultPayrollSettings,
   PAYROLL_FREQUENCY_OPTIONS,
   payrollFrequencyLabel,
 } from "@/lib/banking/generate-member-transactions";
 import { formatCurrency } from "@/lib/format/currency";
+import { cn } from "@/lib/utils";
 
 interface MemberAccount {
   id: string;
@@ -38,6 +45,8 @@ interface MemberRecord {
   address_state: string | null;
   delay_transactions: boolean;
   bill_pay_enabled: boolean;
+  pause_transfers: boolean;
+  transfer_pause_reason: string | null;
   cot_required: boolean;
   imf_required: boolean;
   has_cot_code?: boolean;
@@ -51,6 +60,7 @@ type FeedbackSection =
   | "fund"
   | "generate"
   | "delay"
+  | "pauseTransfer"
   | "billPay"
   | "profile";
 
@@ -101,6 +111,8 @@ export function MemberControlsPanel({
   const [imfRequired, setImfRequired] = useState(false);
   const [delayTransactions, setDelayTransactions] = useState(false);
   const [billPayEnabled, setBillPayEnabled] = useState(true);
+  const [pauseTransfers, setPauseTransfers] = useState(false);
+  const [transferPauseReason, setTransferPauseReason] = useState("");
 
   const selected = useMemo(
     () => members.find((m) => m.id === selectedId) ?? null,
@@ -154,6 +166,8 @@ export function MemberControlsPanel({
     setImfRequired(selected.imf_required);
     setDelayTransactions(selected.delay_transactions);
     setBillPayEnabled(selected.bill_pay_enabled !== false);
+    setPauseTransfers(selected.pause_transfers);
+    setTransferPauseReason(selected.transfer_pause_reason ?? "");
     setCotCode("");
     setImfCode("");
     const firstAccount = selected.accounts?.[0];
@@ -323,7 +337,12 @@ export function MemberControlsPanel({
           {loading ? (
             <p className="text-sm text-white/50">Loading members...</p>
           ) : members.length === 0 ? (
-            <p className="text-sm text-white/50">No active members yet.</p>
+            feedback.load?.type === "error" ? null : (
+              <p className="text-sm text-white/50">
+                No members yet. Create one above or approve a membership application
+                from Members.
+              </p>
+            )
           ) : (
             <>
               <select
@@ -392,7 +411,7 @@ export function MemberControlsPanel({
                 disabled={busy || selected.member_status === "paused"}
                 variant="outline"
                 onClick={() => void updateMemberStatus("paused")}
-                className="border-amber-500/30 bg-transparent text-amber-200 hover:bg-amber-500/10"
+                className={adminButtonWarning}
               >
                 Pause Account
               </Button>
@@ -400,7 +419,7 @@ export function MemberControlsPanel({
                 disabled={busy || selected.member_status === "suspended"}
                 variant="outline"
                 onClick={() => void updateMemberStatus("suspended")}
-                className="border-red-500/30 bg-transparent text-red-200 hover:bg-red-500/10"
+                className={adminButtonDanger}
               >
                 Suspend Account
               </Button>
@@ -411,7 +430,7 @@ export function MemberControlsPanel({
                     selected.member_status !== "suspended")
                 }
                 onClick={() => void updateMemberStatus("active")}
-                className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+                className={adminButtonPrimary}
               >
                 Restore Access
               </Button>
@@ -477,7 +496,7 @@ export function MemberControlsPanel({
                     disabled={busy || !adjustAmount}
                     variant="outline"
                     onClick={() => void handleAdjust("debit")}
-                    className="flex-1 border-white/20 bg-transparent text-white hover:bg-white/5"
+                    className={cn("flex-1", adminButtonNeutral)}
                   >
                     Debit
                   </Button>
@@ -680,6 +699,123 @@ export function MemberControlsPanel({
                 {delayTransactions ? "DELAY TRANSACTION — ON" : "DELAY TRANSACTION — OFF"}
               </Button>
               <AdminActionFeedback feedback={feedback.delay ?? null} />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-white/10 bg-[#0f2233] text-white shadow-none">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg">Pause Transfer</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-white/55">
+                When enabled, this member&apos;s next transfer will pass PIN
+                verification but stop during processing. The member sees your
+                pause reason — not an incorrect PIN message.
+              </p>
+              <div className="space-y-2">
+                <Label className="text-white/70">Pause reason (shown to member)</Label>
+                <textarea
+                  value={transferPauseReason}
+                  onChange={(e) => setTransferPauseReason(e.target.value)}
+                  placeholder="e.g. Additional verification is required before this transfer can be completed. Contact your account officer."
+                  rows={4}
+                  className="w-full rounded-xl border border-white/15 bg-[#06121c] px-3 py-2 text-sm text-white placeholder:text-white/35"
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (!selected) return;
+                  const next = !pauseTransfers;
+                  if (next && !transferPauseReason.trim()) {
+                    showFeedback(
+                      "pauseTransfer",
+                      "error",
+                      "Enter a pause reason before enabling Pause Transfer."
+                    );
+                    return;
+                  }
+                  setPauseTransfers(next);
+                  setBusy(true);
+                  clearFeedback("pauseTransfer");
+                  const response = await fetch(`/api/admin/members/${selected.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      pauseTransfers: next,
+                      transferPauseReason: transferPauseReason.trim(),
+                    }),
+                  });
+                  const data = await response.json();
+                  setBusy(false);
+                  if (!response.ok) {
+                    setPauseTransfers(!next);
+                    showFeedback(
+                      "pauseTransfer",
+                      "error",
+                      data.error ?? "Update failed."
+                    );
+                    return;
+                  }
+                  showFeedback(
+                    "pauseTransfer",
+                    "success",
+                    next
+                      ? "PAUSE TRANSFER is ON — member will see your reason during processing."
+                      : "PAUSE TRANSFER is OFF — transfers proceed normally."
+                  );
+                  void load();
+                }}
+                className={
+                  pauseTransfers
+                    ? "w-full bg-red-500/90 text-white hover:bg-red-500"
+                    : "w-full bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+                }
+              >
+                {pauseTransfers ? "PAUSE TRANSFER — ON" : "PAUSE TRANSFER — OFF"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy || !pauseTransfers}
+                onClick={async () => {
+                  if (!selected) return;
+                  if (!transferPauseReason.trim()) {
+                    showFeedback(
+                      "pauseTransfer",
+                      "error",
+                      "Enter a pause reason to save."
+                    );
+                    return;
+                  }
+                  setBusy(true);
+                  clearFeedback("pauseTransfer");
+                  const response = await fetch(`/api/admin/members/${selected.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      transferPauseReason: transferPauseReason.trim(),
+                    }),
+                  });
+                  const data = await response.json();
+                  setBusy(false);
+                  if (!response.ok) {
+                    showFeedback(
+                      "pauseTransfer",
+                      "error",
+                      data.error ?? "Failed to save pause reason."
+                    );
+                    return;
+                  }
+                  showFeedback("pauseTransfer", "success", "Pause reason saved.");
+                  void load();
+                }}
+                className={cn("w-full", adminButtonNeutral)}
+              >
+                Save Pause Reason
+              </Button>
+              <AdminActionFeedback feedback={feedback.pauseTransfer ?? null} />
             </CardContent>
           </Card>
 

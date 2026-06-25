@@ -11,9 +11,13 @@ import {
   ensureMembershipApplication,
   pendingSignupExpiresAt,
 } from "@/lib/auth/signup-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:verify-otp", 20, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = otpVerifySchema.safeParse(body);
     if (!parsed.success) {

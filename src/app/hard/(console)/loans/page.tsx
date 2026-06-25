@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  adminButtonDanger,
+  adminButtonNeutral,
+  adminButtonPrimary,
+} from "@/components/admin/admin-button-styles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -126,7 +131,7 @@ export default function AdminLoansPage() {
                       <div className="flex gap-1">
                         <Button
                           size="sm"
-                          className="bg-northium-gold text-[#06121c]"
+                          className={adminButtonPrimary}
                           onClick={() => void decide(app.id, "approved")}
                         >
                           Approve
@@ -134,7 +139,7 @@ export default function AdminLoansPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-white/20 text-white"
+                          className={adminButtonNeutral}
                           onClick={() => void decide(app.id, "delayed")}
                         >
                           Delay
@@ -142,7 +147,7 @@ export default function AdminLoansPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-red-400/40 text-red-300"
+                          className={adminButtonDanger}
                           onClick={() => void decide(app.id, "denied")}
                         >
                           Deny

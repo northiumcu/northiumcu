@@ -114,14 +114,6 @@ export async function POST(request: Request) {
       );
     }
 
-    await postAccountTransaction(admin, {
-      accountId: account.id,
-      amount: MASTERCARD_FEE,
-      direction: "debit",
-      type: "fee",
-      description: "Northium Mastercard — application & delivery fee",
-    });
-
     const lastFour = randomLastFour();
     const { data: card, error: cardError } = await admin
       .from("cards")
@@ -133,7 +125,7 @@ export async function POST(request: Request) {
         cardholder_name: `${profile.first_name} ${profile.last_name}`.trim(),
         last_four: lastFour,
         status: "ordered",
-        application_fee_paid: true,
+        application_fee_paid: false,
         design_variant: "northium_gold",
         delivery_eta: deliveryEta(),
       })
@@ -142,6 +134,38 @@ export async function POST(request: Request) {
 
     if (cardError || !card) {
       return NextResponse.json({ error: cardError?.message }, { status: 500 });
+    }
+
+    try {
+      await postAccountTransaction(admin, {
+        accountId: account.id,
+        amount: MASTERCARD_FEE,
+        direction: "debit",
+        type: "fee",
+        description: "Northium Mastercard — application & delivery fee",
+      });
+    } catch (feeError) {
+      await admin.from("cards").delete().eq("id", card.id);
+      const message =
+        feeError instanceof Error ? feeError.message : "Fee charge failed.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { error: feeFlagError } = await admin
+      .from("cards")
+      .update({ application_fee_paid: true, updated_at: new Date().toISOString() })
+      .eq("id", card.id);
+
+    if (feeFlagError) {
+      await postAccountTransaction(admin, {
+        accountId: account.id,
+        amount: MASTERCARD_FEE,
+        direction: "credit",
+        type: "refund",
+        description: "Northium Mastercard — application fee refund",
+      }).catch(() => undefined);
+      await admin.from("cards").delete().eq("id", card.id);
+      return NextResponse.json({ error: feeFlagError.message }, { status: 500 });
     }
 
     await notifyMember(admin, {

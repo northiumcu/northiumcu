@@ -8,7 +8,10 @@ import {
   isLegacyAdminPath,
 } from "@/lib/auth/admin-paths";
 import { isPublicMarketingPath, MEMBER_HOME } from "@/lib/auth/member-shell";
-import { X_ROBOTS_TAG } from "@/lib/security/crawl-block";
+import {
+  isBlockedCrawlerUserAgent,
+  X_ROBOTS_TAG,
+} from "@/lib/security/crawl-block";
 
 const MEMBER_PREFIX = "/member";
 
@@ -28,6 +31,13 @@ export async function updateSession(request: NextRequest) {
 
 async function runSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  if (
+    isBlockedCrawlerUserAgent(request.headers.get("user-agent")) &&
+    !pathname.startsWith("/api/")
+  ) {
+    return withCrawlBlock(new NextResponse(null, { status: 403 }));
+  }
 
   if (isLegacyAdminPath(pathname)) {
     return withCrawlBlock(

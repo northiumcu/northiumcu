@@ -1,8 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AdminActionFeedback } from "@/components/admin/admin-action-feedback";
+import {
+  adminButtonDanger,
+  adminButtonPrimary,
+} from "@/components/admin/admin-button-styles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -11,7 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AdminActionFeedback } from "@/components/admin/admin-action-feedback";
 
 interface AdminCardRecord {
   id: string;
@@ -38,7 +43,8 @@ export function AdminCardsPanel() {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [approvalNotes, setApprovalNotes] = useState<Record<string, string>>({});
+  const [declineReasons, setDeclineReasons] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,13 +71,29 @@ export function AdminCardsPanel() {
   const issued = cards.filter((card) => card.status !== "ordered");
 
   async function review(id: string, decision: "approved" | "denied") {
+    if (decision === "denied") {
+      const reason = declineReasons[id]?.trim() ?? "";
+      if (reason.length < 10) {
+        setFeedback({
+          type: "error",
+          text: "Enter a decline reason (at least 10 characters) before denying.",
+        });
+        return;
+      }
+    }
+
     setBusyId(id);
     setFeedback(null);
+
+    const note =
+      decision === "denied"
+        ? declineReasons[id]?.trim()
+        : approvalNotes[id]?.trim() || undefined;
 
     const response = await fetch(`/api/admin/cards/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, note: notes[id] || undefined }),
+      body: JSON.stringify({ decision, note }),
     });
     const data = await response.json();
     setBusyId(null);
@@ -85,8 +107,8 @@ export function AdminCardsPanel() {
       type: "success",
       text:
         decision === "approved"
-          ? "Card approved. A Mastercard number, expiry, and CVV were issued for the member."
-          : "Card application denied. The member has been notified.",
+          ? "Card approved. The member was emailed about production and mailing (7–30 days)."
+          : "Card application denied. The member was emailed with your decline reason.",
     });
     void load();
   }
@@ -158,23 +180,44 @@ export function AdminCardsPanel() {
                   </TableCell>
                   <TableCell>{card.application_fee_paid ? "Yes" : "No"}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex flex-col items-end gap-2">
-                      <Input
-                        value={notes[card.id] ?? ""}
-                        onChange={(e) =>
-                          setNotes((current) => ({
-                            ...current,
-                            [card.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="Note to member"
-                        className="h-8 w-44 rounded-lg border-white/15 bg-[#06121c] text-xs text-white"
-                      />
+                    <div className="flex min-w-[15rem] flex-col items-end gap-3">
+                      <div className="w-full space-y-1 text-left">
+                        <Label className="text-[10px] uppercase tracking-wide text-white/45">
+                          Optional approval note
+                        </Label>
+                        <Input
+                          value={approvalNotes[card.id] ?? ""}
+                          onChange={(e) =>
+                            setApprovalNotes((current) => ({
+                              ...current,
+                              [card.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Included in approval email"
+                          className="h-8 rounded-lg border-white/15 bg-[#06121c] text-xs text-white"
+                        />
+                      </div>
+                      <div className="w-full space-y-1 text-left">
+                        <Label className="text-[10px] uppercase tracking-wide text-red-300/80">
+                          Decline reason (required to deny)
+                        </Label>
+                        <Input
+                          value={declineReasons[card.id] ?? ""}
+                          onChange={(e) =>
+                            setDeclineReasons((current) => ({
+                              ...current,
+                              [card.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="e.g. Incomplete identity verification on file"
+                          className="h-8 rounded-lg border-white/15 bg-[#06121c] text-xs text-white"
+                        />
+                      </div>
                       <div className="flex gap-1">
                         <Button
                           size="sm"
                           disabled={busyId === card.id}
-                          className="bg-northium-gold text-[#06121c]"
+                          className={adminButtonPrimary}
                           onClick={() => void review(card.id, "approved")}
                         >
                           Approve & Issue
@@ -183,7 +226,7 @@ export function AdminCardsPanel() {
                           size="sm"
                           variant="outline"
                           disabled={busyId === card.id}
-                          className="border-red-400/40 text-red-300"
+                          className={adminButtonDanger}
                           onClick={() => void review(card.id, "denied")}
                         >
                           Deny

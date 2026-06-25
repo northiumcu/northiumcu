@@ -3,15 +3,39 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
 import { issueMastercardCredentials } from "@/lib/banking/card-issuance";
+import { postAccountTransaction } from "@/lib/banking/post-transaction";
+import { MASTERCARD_FEE } from "@/lib/banking/member-products";
 import {
   logAdminAction,
   requestAuditContext,
 } from "@/lib/audit/log-admin-action";
+import {
+  buildCardApprovedEmail,
+  buildCardDeclinedEmail,
+  formatCardDeclineReason,
+  formatDeliveryEtaLabel,
+  physicalCardDeliveryEta,
+} from "@/lib/email/card-alerts";
+import { sendMemberEmail } from "@/lib/email/member-alerts";
 
-const decisionSchema = z.object({
-  decision: z.enum(["approved", "denied"]),
-  note: z.string().max(500).optional(),
-});
+const decisionSchema = z
+  .object({
+    decision: z.enum(["approved", "denied"]),
+    note: z.string().max(500).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.decision === "denied") {
+      const reason = data.note?.trim() ?? "";
+      if (reason.length < 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "A decline reason is required (at least 10 characters) so the member can be notified.",
+          path: ["note"],
+        });
+      }
+    }
+  });
 
 export async function PATCH(
   request: Request,
@@ -50,6 +74,18 @@ export async function PATCH(
     const now = new Date().toISOString();
 
     if (parsed.data.decision === "denied") {
+      const declineReason = formatCardDeclineReason(note ?? "");
+
+      if (card.application_fee_paid && card.linked_account_id) {
+        await postAccountTransaction(admin, {
+          accountId: card.linked_account_id,
+          amount: MASTERCARD_FEE,
+          direction: "credit",
+          type: "refund",
+          description: "Northium Mastercard — application fee refund",
+        });
+      }
+
       await admin
         .from("cards")
         .update({
@@ -61,11 +97,25 @@ export async function PATCH(
       await notifyMember(admin, {
         userId: card.member_id,
         title: "Card application declined",
-        message:
-          note ??
-          "Your Northium Mastercard application was not approved at this time. Contact your account officer with questions.",
+        message: `${declineReason} Contact your account officer for follow-up.`,
         category: "transactional",
       });
+
+      const { data: memberProfile } = await admin
+        .from("profiles")
+        .select("first_name")
+        .eq("id", card.member_id)
+        .single();
+
+      await sendMemberEmail(
+        admin,
+        card.member_id,
+        buildCardDeclinedEmail({
+          firstName: memberProfile?.first_name?.trim() || "Member",
+          productName: card.product_name ?? "Northium Mastercard",
+          reason: note ?? declineReason,
+        })
+      );
 
       const audit = requestAuditContext(request);
       await logAdminAction(admin, {
@@ -83,6 +133,8 @@ export async function PATCH(
     }
 
     const credentials = issueMastercardCredentials();
+    const deliveryEta = physicalCardDeliveryEta();
+    const deliveryEtaLabel = formatDeliveryEtaLabel(deliveryEta);
 
     const { data: updated, error: updateError } = await admin
       .from("cards")
@@ -93,7 +145,7 @@ export async function PATCH(
         cvv_encrypted: credentials.cvvEncrypted,
         expires_at: credentials.expiresAt,
         approved_at: now,
-        delivery_eta: null,
+        delivery_eta: deliveryEta,
         updated_at: now,
       })
       .eq("id", id)
@@ -109,14 +161,32 @@ export async function PATCH(
       );
     }
 
+    const approvalMessage =
+      note ??
+      `Your Northium Mastercard has been approved. Your physical card is being produced and will be mailed to the address on file within 7 to 30 days (estimated ${deliveryEtaLabel}).`;
+
     await notifyMember(admin, {
       userId: card.member_id,
-      title: "Your Northium Mastercard is ready",
-      message:
-        note ??
-        "Your Northium Mastercard has been approved. Sign in to Cards to view your card details.",
+      title: "Card application approved",
+      message: approvalMessage,
       category: "transactional",
     });
+
+    const { data: memberProfile } = await admin
+      .from("profiles")
+      .select("first_name")
+      .eq("id", card.member_id)
+      .single();
+
+    await sendMemberEmail(
+      admin,
+      card.member_id,
+      buildCardApprovedEmail({
+        firstName: memberProfile?.first_name?.trim() || "Member",
+        productName: card.product_name ?? "Northium Mastercard",
+        deliveryEtaLabel,
+      })
+    );
 
     const audit = requestAuditContext(request);
     await logAdminAction(admin, {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import { disburseApprovedLoan } from "@/lib/banking/loan-disbursement";
 import { formatCurrency } from "@/lib/format/currency";
 import {
   logAdminAction,
@@ -82,6 +83,10 @@ export async function POST(
     }
 
     await admin.from("loans").update(updates).eq("id", id);
+
+    if (parsed.data.decision === "approved") {
+      await disburseApprovedLoan(admin, id);
+    }
 
     const audit = requestAuditContext(request);
     await logAdminAction(admin, {

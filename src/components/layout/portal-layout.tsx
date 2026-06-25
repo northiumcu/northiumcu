@@ -1,5 +1,6 @@
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import { PortalSidebar } from "@/components/layout/portal-sidebar";
+import { InactivityLogout } from "@/components/auth/inactivity-logout";
 import { MemberPausedBanner } from "@/components/portal/member-paused-banner";
 import { MemberWelcomeBar } from "@/components/portal/member-welcome-bar";
 import { MEMBER_HOME } from "@/lib/auth/member-shell";
@@ -39,6 +40,7 @@ export function PortalLayout({
 
   return (
     <div className="member-portal flex min-h-screen">
+      <InactivityLogout />
       <PortalSidebar nav={nav} title={title} homeHref={homeHref} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div

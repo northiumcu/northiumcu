@@ -10,6 +10,12 @@ import {
   AdminActionFeedback,
   type AdminFeedback,
 } from "@/components/admin/admin-action-feedback";
+import {
+  adminButtonDanger,
+  adminButtonNeutral,
+  adminButtonPrimary,
+  adminButtonWarning,
+} from "@/components/admin/admin-button-styles";
 
 interface KycRecord {
   id: string;
@@ -71,15 +77,6 @@ function statusBadgeClass(status: string) {
       return "border-northium-gold/30 bg-northium-gold/10 text-northium-gold";
   }
 }
-
-const actionPrimary =
-  "bg-northium-gold text-[#06121c] hover:bg-northium-gold/90 focus-visible:ring-2 focus-visible:ring-northium-gold/40 active:bg-northium-gold/80";
-const actionNeutral =
-  "border border-white/20 bg-[#06121c] text-white hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/20 active:bg-white/15";
-const actionWarning =
-  "border border-amber-500/35 bg-amber-950/20 text-amber-100 hover:bg-amber-500/15 focus-visible:ring-2 focus-visible:ring-amber-500/30 active:bg-amber-500/25";
-const actionDanger =
-  "border border-red-500/35 bg-red-950/25 text-red-100 hover:bg-red-500/15 focus-visible:ring-2 focus-visible:ring-red-500/30 active:bg-red-500/25";
 
 export function MembershipReviewQueue() {
   const [applications, setApplications] = useState<MembershipApplication[]>([]);
@@ -222,7 +219,7 @@ export function MembershipReviewQueue() {
           variant="outline"
           disabled={loading}
           onClick={() => void load()}
-          className={cn(actionNeutral, "gap-2")}
+          className={cn(adminButtonNeutral, "gap-2")}
         >
           <RefreshCw className={cn("size-4", loading && "animate-spin")} />
           Refresh queue
@@ -389,7 +386,7 @@ export function MembershipReviewQueue() {
                     size="sm"
                     disabled={busy || !hasKyc}
                     onClick={() => void approve(selected.id, true)}
-                    className={actionPrimary}
+                    className={adminButtonPrimary}
                   >
                     <CheckCircle2 className="size-4" />
                     Approve with KYC
@@ -399,7 +396,7 @@ export function MembershipReviewQueue() {
                     size="sm"
                     disabled={busy}
                     onClick={() => void approve(selected.id, false)}
-                    className={actionNeutral}
+                    className={adminButtonNeutral}
                   >
                     Approve without KYC
                   </Button>
@@ -408,7 +405,7 @@ export function MembershipReviewQueue() {
                     size="sm"
                     disabled={busy || selected.status === "under_review"}
                     onClick={() => void markPending(selected.id)}
-                    className={actionWarning}
+                    className={adminButtonWarning}
                   >
                     <Clock3 className="size-4" />
                     Mark pending
@@ -418,7 +415,7 @@ export function MembershipReviewQueue() {
                     size="sm"
                     disabled={busy}
                     onClick={() => setShowRejectForm((value) => !value)}
-                    className={actionDanger}
+                    className={adminButtonDanger}
                   >
                     <XCircle className="size-4" />
                     Reject
@@ -450,7 +447,7 @@ export function MembershipReviewQueue() {
                         size="sm"
                         disabled={busy || rejectReason.trim().length < 8}
                         onClick={() => void reject(selected.id)}
-                        className={actionDanger}
+                        className={adminButtonDanger}
                       >
                         Confirm rejection
                       </Button>
@@ -459,7 +456,7 @@ export function MembershipReviewQueue() {
                         size="sm"
                         disabled={busy}
                         onClick={() => setShowRejectForm(false)}
-                        className={actionNeutral}
+                        className={adminButtonNeutral}
                       >
                         Cancel
                       </Button>

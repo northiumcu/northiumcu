@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AmountInput } from "@/components/forms/amount-input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoanCard } from "@/components/portal/loan-card";
 import { LOAN_PURPOSES, MORTGAGE_PURPOSES } from "@/lib/banking/member-products";
+import {
+  estimateMonthlyLoanPayment,
+  getEstimatedLoanRate,
+} from "@/lib/banking/loan-calculator";
 import type { Loan } from "@/types/database";
-import { formatCurrency } from "@/lib/format/currency";
+import { formatCurrency, parseAmountInput } from "@/lib/format/currency";
 
 type LoanRow = Loan & {
   purpose?: string | null;
@@ -24,6 +30,7 @@ export function MemberLoansClient() {
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
   const [termMonths, setTermMonths] = useState("60");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,7 +50,32 @@ export function MemberLoansClient() {
 
   const purposes = loanType === "home" ? MORTGAGE_PURPOSES : LOAN_PURPOSES;
 
+  const parsedAmount = parseAmountInput(amount);
+  const parsedTerm = Number(termMonths);
+  const estimatedRate = getEstimatedLoanRate(loanType);
+
+  const estimatedMonthlyPayment = useMemo(() => {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return null;
+    if (!Number.isFinite(parsedTerm) || parsedTerm < 6) return null;
+    return estimateMonthlyLoanPayment(parsedAmount, parsedTerm, estimatedRate);
+  }, [parsedAmount, parsedTerm, estimatedRate]);
+
+  const canSubmit =
+    Boolean(purpose) &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount >= 1000 &&
+    Number.isFinite(parsedTerm) &&
+    parsedTerm >= 6 &&
+    parsedTerm <= 360 &&
+    termsAccepted &&
+    estimatedMonthlyPayment !== null;
+
   async function apply() {
+    if (!canSubmit || estimatedMonthlyPayment === null) {
+      setError("Complete all fields and accept the terms and conditions.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -53,8 +85,9 @@ export function MemberLoansClient() {
       body: JSON.stringify({
         loanType,
         purpose: purposes.find((p) => p.value === purpose)?.label ?? purpose,
-        requestedAmount: Number(amount),
-        termMonths: Number(termMonths),
+        requestedAmount: parsedAmount,
+        termMonths: parsedTerm,
+        termsAccepted: true,
       }),
     });
     const data = await response.json();
@@ -65,6 +98,7 @@ export function MemberLoansClient() {
     }
     setMessage("Application submitted. You will be notified when reviewed.");
     setAmount("");
+    setTermsAccepted(false);
     load();
   }
 
@@ -137,12 +171,11 @@ export function MemberLoansClient() {
             </div>
             <div className="space-y-2">
               <Label>Amount Requested</Label>
-              <Input
-                type="number"
-                min="1000"
+              <AmountInput
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="rounded-xl"
+                onChange={setAmount}
+                allowDecimals={false}
+                placeholder="25,000"
               />
             </div>
             <div className="space-y-2">
@@ -157,10 +190,54 @@ export function MemberLoansClient() {
               />
             </div>
           </div>
+
+          {estimatedMonthlyPayment !== null && (
+            <div className="rounded-xl border border-northium-border bg-northium-surface/60 px-4 py-4">
+              <p className="text-sm text-northium-muted">Estimated monthly payment</p>
+              <p className="mt-1 font-heading text-2xl font-bold text-northium-primary">
+                {formatCurrency(estimatedMonthlyPayment)}
+              </p>
+              <p className="mt-2 text-xs text-northium-muted">
+                Based on {estimatedRate.toFixed(2)}% APR over {parsedTerm} months. Final terms may
+                vary after underwriting review.
+              </p>
+            </div>
+          )}
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-northium-border bg-white px-4 py-3 text-sm text-northium-muted">
+            <input
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 rounded border-northium-border accent-northium-primary"
+            />
+            <span>
+              I agree to the{" "}
+              <Link
+                href="/legal/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-northium-primary underline-offset-2 hover:underline"
+              >
+                Terms and Conditions
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/legal/loan-agreement"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-northium-primary underline-offset-2 hover:underline"
+              >
+                Loan Agreement
+              </Link>
+              .
+            </span>
+          </label>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
           {message && <p className="text-sm text-northium-success">{message}</p>}
           <Button
-            disabled={loading || !purpose || !amount}
+            disabled={loading || !canSubmit}
             onClick={() => void apply()}
             className="bg-northium-primary hover:bg-northium-secondary"
           >

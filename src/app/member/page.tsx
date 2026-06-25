@@ -8,6 +8,7 @@ export default function MemberPage() {
       <PortalPageHeader
         title="Member Dashboard"
         description="Your accounts, activity, and quick actions in one place."
+        className="hidden sm:block"
       />
       <div className="space-y-8">
         <MemberKycPanel />

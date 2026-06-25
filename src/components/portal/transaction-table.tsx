@@ -58,7 +58,9 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
                 className="border-northium-border/50 transition-colors hover:bg-sky-50/50"
               >
                 <TableCell className="text-northium-muted">
-                  {dateFormatter.format(new Date(tx.created_at))}
+                  {dateFormatter.format(
+                    new Date(tx.posted_at ?? tx.created_at)
+                  )}
                 </TableCell>
                 <TableCell className="font-medium text-northium-text">
                   {tx.description}

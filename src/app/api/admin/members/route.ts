@@ -29,6 +29,8 @@ export async function GET() {
         imf_required,
         delay_transactions,
         bill_pay_enabled,
+        pause_transfers,
+        transfer_pause_reason,
         cot_code_encrypted,
         imf_code_encrypted,
         accounts (

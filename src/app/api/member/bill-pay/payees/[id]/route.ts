@@ -51,7 +51,6 @@ export async function PATCH(
       .update({
         nickname: parsed.data.nickname,
         payee_name: parsed.data.payeeName,
-        routing_number: parsed.data.routingNumber,
         account_number_encrypted: encryptSensitive(accountDigits),
         account_last_four: lastFour(accountDigits),
         category: parsed.data.category ?? null,

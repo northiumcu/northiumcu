@@ -4,9 +4,13 @@ import { generateOtpCode, hashOtp } from "@/lib/auth/crypto";
 import { forgotPinSchema } from "@/lib/auth/validators";
 import { EmailDeliveryError } from "@/lib/email/config";
 import { sendOtpEmail } from "@/lib/email/send-otp";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:forgot-pin", 8, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = forgotPinSchema.safeParse(body);
     if (!parsed.success) {

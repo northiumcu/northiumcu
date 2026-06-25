@@ -5,6 +5,7 @@ import { generateOtpCode, hashOtp } from "@/lib/auth/crypto";
 import { sendOtpEmail } from "@/lib/email/send-otp";
 import { EmailDeliveryError } from "@/lib/email/config";
 import { maskEmail, SIGNUP_RESEND_COOLDOWN_MS } from "@/lib/auth/signup-session";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 const loginResendSchema = z.object({
   challengeId: z.string().uuid(),
@@ -12,6 +13,9 @@ const loginResendSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:login-resend-otp", 8, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = loginResendSchema.safeParse(body);
     if (!parsed.success) {

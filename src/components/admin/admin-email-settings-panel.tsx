@@ -8,6 +8,7 @@ import {
   AdminActionFeedback,
   type AdminFeedback,
 } from "@/components/admin/admin-action-feedback";
+import { adminButtonNeutral } from "@/components/admin/admin-button-styles";
 
 interface EmailStatus {
   configured: boolean;
@@ -163,7 +164,7 @@ export function AdminEmailSettingsPanel() {
           disabled={busy}
           variant="outline"
           onClick={() => void save(true)}
-          className="border-white/20 bg-transparent text-white hover:bg-white/5"
+          className={adminButtonNeutral}
         >
           Save & Send Test
         </Button>
@@ -171,7 +172,7 @@ export function AdminEmailSettingsPanel() {
           disabled={busy || !status?.configured}
           variant="outline"
           onClick={() => void sendTest()}
-          className="border-white/20 bg-transparent text-white hover:bg-white/5"
+          className={adminButtonNeutral}
         >
           Send Test Only
         </Button>

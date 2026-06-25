@@ -2,15 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { CheckCircle2, Download, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Download, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
+import { AmountInput } from "@/components/forms/amount-input";
 import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
-import { formatCurrency } from "@/lib/format/currency";
+import {
+  formatTransferAccountLabel,
+  listInternalDestinationAccounts,
+  pickDefaultInternalDestination,
+} from "@/lib/banking/internal-transfer";
+import { WIRE_COUNTRIES } from "@/lib/geo/wire-countries";
+import { formatCurrency, parseAmountInput } from "@/lib/format/currency";
 
 interface Account {
   id: string;
@@ -29,6 +37,8 @@ const transferTypes = [
 ] as const;
 
 type Step = "details" | "confirm" | "pin" | "processing" | "failed" | "success";
+
+import { TRANSACTION_INCOMPLETE_TITLE } from "@/lib/banking/transfer-pause";
 
 const TRANSFER_FAILURE_MESSAGE =
   "This transfer could not be concluded. Please try again or contact your Northium account officer for assistance.";
@@ -69,7 +79,7 @@ function buildTransferRequestBody(input: {
   const body: Record<string, unknown> = {
     sourceAccountId: input.sourceAccountId,
     type: input.type,
-    amount: Number(input.amount),
+    amount: parseAmountInput(input.amount),
     pin: input.pin,
   };
 
@@ -90,12 +100,10 @@ function buildTransferRequestBody(input: {
     body.beneficiaryName = input.beneficiaryName.trim();
     body.destinationRoutingNumber = input.routingNumber.trim();
     body.destinationAccountNumber = input.accountNumber.trim();
-    if (input.type === "local_wire" && input.beneficiaryBank.trim()) {
-      body.beneficiaryBank = input.beneficiaryBank.trim();
-    }
+    body.beneficiaryBank = input.beneficiaryBank.trim();
   } else if (input.type === "international_wire") {
     body.beneficiaryName = input.beneficiaryName.trim();
-    if (input.beneficiaryBank.trim()) body.beneficiaryBank = input.beneficiaryBank.trim();
+    body.beneficiaryBank = input.beneficiaryBank.trim();
     body.wireSwift = input.wireSwift.trim();
     body.wireIban = input.wireIban.trim();
     body.wireCountry = input.wireCountry.trim();
@@ -112,6 +120,8 @@ function buildTransferRequestBody(input: {
 }
 
 export function TransferFlow() {
+  const searchParams = useSearchParams();
+  const fromAccountId = searchParams.get("from");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [type, setType] = useState<string>("direct_deposit");
   const [sourceAccountId, setSourceAccountId] = useState("");
@@ -137,12 +147,19 @@ export function TransferFlow() {
   const [transferId, setTransferId] = useState<string | null>(null);
   const [pendingReview, setPendingReview] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [transferPaused, setTransferPaused] = useState(false);
+  const [failedProgress, setFailedProgress] = useState(60);
   const [processingSlow, setProcessingSlow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
   const isZelle = type === "zelle";
   const showConfirm = !isZelle;
+  const sourceAccount = accounts.find((account) => account.id === sourceAccountId);
+  const internalDestinationAccounts = useMemo(
+    () => listInternalDestinationAccounts(accounts, sourceAccountId),
+    [accounts, sourceAccountId]
+  );
   const showSecurityCodes =
     transferRequiresSecurityCodes(type) && (cotRequired || imfRequired);
   const pinStepReady =
@@ -159,8 +176,16 @@ export function TransferFlow() {
           (a: Account) => a.status === "active"
         );
         setAccounts(active);
-        if (active[0]) setSourceAccountId(active[0].id);
-        if (active[1]) setDestinationAccountId(active[1].id);
+        const preferredSource =
+          fromAccountId && active.some((a: Account) => a.id === fromAccountId)
+            ? fromAccountId
+            : active[0]?.id;
+        if (preferredSource) setSourceAccountId(preferredSource);
+        const defaultDestination = pickDefaultInternalDestination(
+          active,
+          preferredSource ?? ""
+        );
+        if (defaultDestination) setDestinationAccountId(defaultDestination);
       });
     void fetch("/api/member/transfer-requirements")
       .then((r) => r.json())
@@ -168,7 +193,22 @@ export function TransferFlow() {
         setCotRequired(Boolean(data.cotRequired));
         setImfRequired(Boolean(data.imfRequired));
       });
-  }, []);
+  }, [fromAccountId]);
+
+  useEffect(() => {
+    if (type !== "internal" || !sourceAccountId) return;
+    const valid = internalDestinationAccounts.some(
+      (account) => account.id === destinationAccountId
+    );
+    if (!valid && internalDestinationAccounts[0]) {
+      setDestinationAccountId(internalDestinationAccounts[0].id);
+    }
+  }, [
+    type,
+    sourceAccountId,
+    destinationAccountId,
+    internalDestinationAccounts,
+  ]);
 
   useEffect(() => {
     setBeneficiaryName("");
@@ -184,17 +224,33 @@ export function TransferFlow() {
     setError(null);
   }, [type]);
 
+  function syncDestinationForSource(nextSourceId: string) {
+    if (type !== "internal") return;
+    const nextDestination = pickDefaultInternalDestination(accounts, nextSourceId);
+    setDestinationAccountId(nextDestination ?? "");
+  }
+
   const summary = useMemo(() => {
     const source = accounts.find((a) => a.id === sourceAccountId);
+    const destination = accounts.find((a) => a.id === destinationAccountId);
     return {
       typeLabel: transferTypes.find((t) => t.value === type)?.label ?? type,
       from: source
-        ? `${source.type} ••••${source.account_number.slice(-4)}`
+        ? formatTransferAccountLabel(source)
         : "—",
-      amount: Number(amount || 0),
+      to:
+        type === "internal" && destination
+          ? formatTransferAccountLabel(destination)
+          : null,
+      amount: parseAmountInput(amount || "0"),
       beneficiary: isZelle
         ? zelleContact
-        : beneficiaryName || "—",
+        : type === "internal" && destination
+          ? formatTransferAccountLabel(destination)
+          : beneficiaryName || "—",
+      bank: beneficiaryBank.trim() || null,
+      country:
+        type === "international_wire" && wireCountry ? wireCountry : null,
     };
   }, [
     accounts,
@@ -202,16 +258,80 @@ export function TransferFlow() {
     type,
     amount,
     beneficiaryName,
+    beneficiaryBank,
     zelleContact,
     isZelle,
+    wireCountry,
+    destinationAccountId,
   ]);
+
+  function requiresBankName() {
+    return (
+      type === "direct_deposit" ||
+      type === "local_wire" ||
+      type === "international_wire"
+    );
+  }
+
+  function validateDetails(): boolean {
+    const parsedAmount = parseAmountInput(amount);
+    if (!amount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError("Enter a valid amount.");
+      return false;
+    }
+    if (requiresBankName() && !beneficiaryBank.trim()) {
+      setError("Enter the receiver bank name.");
+      return false;
+    }
+    if (
+      (type === "direct_deposit" || type === "local_wire") &&
+      (!routingNumber.trim() || !accountNumber.trim())
+    ) {
+      setError("Routing and account numbers are required.");
+      return false;
+    }
+    if (type === "international_wire") {
+      if (!wireSwift.trim() || !wireIban.trim() || !wireCountry) {
+        setError("SWIFT, IBAN, and destination country are required.");
+        return false;
+      }
+      if (!beneficiaryName.trim()) {
+        setError("Receiver name is required.");
+        return false;
+      }
+    }
+    if (type === "internal") {
+      if (internalDestinationAccounts.length === 0) {
+        setError(
+          "You need at least two active accounts, or a loan disbursement account plus checking or savings, for an internal transfer."
+        );
+        return false;
+      }
+      if (
+        !destinationAccountId ||
+        destinationAccountId === sourceAccountId ||
+        !internalDestinationAccounts.some(
+          (account) => account.id === destinationAccountId
+        )
+      ) {
+        setError("Select a destination account for this transfer.");
+        return false;
+      }
+    }
+    if (!isZelle && type !== "internal" && !beneficiaryName.trim()) {
+      setError("Receiver name is required.");
+      return false;
+    }
+    if (isZelle && !zelleContact.trim()) {
+      setError("Zelle email or mobile number is required.");
+      return false;
+    }
+    return true;
+  }
 
   function goToPin() {
     setError(null);
-    if (!amount || Number(amount) <= 0) {
-      setError("Enter a valid amount.");
-      return;
-    }
+    if (!validateDetails()) return;
     setStep(showConfirm ? "confirm" : "pin");
   }
 
@@ -234,6 +354,7 @@ export function TransferFlow() {
     submitLockRef.current = true;
     setSubmitting(true);
     setError(null);
+    setTransferPaused(false);
     setProcessingSlow(false);
     setStep("processing");
     setProgress(0);
@@ -282,6 +403,9 @@ export function TransferFlow() {
 
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
+        transferPaused?: boolean;
+        message?: string;
+        debited?: boolean;
         transfer?: {
           id?: string;
           status?: string;
@@ -289,9 +413,24 @@ export function TransferFlow() {
         };
       };
 
+      if (data.transferPaused && typeof data.message === "string") {
+        const pauseAt = 55 + Math.floor(Math.random() * 11);
+        setProgress(pauseAt);
+        setFailedProgress(pauseAt);
+        await new Promise((r) => setTimeout(r, 500));
+        setTransferPaused(true);
+        setStatusMessage(data.message);
+        setStep("failed");
+        setPin("");
+        return;
+      }
+
       if (!response.ok) {
-        setProgress(60);
+        const failAt = 55 + Math.floor(Math.random() * 11);
+        setProgress(failAt);
+        setFailedProgress(failAt);
         await new Promise((r) => setTimeout(r, 400));
+        setTransferPaused(false);
         setStatusMessage(
           typeof data.error === "string" && data.error.trim()
             ? data.error
@@ -306,9 +445,13 @@ export function TransferFlow() {
       await new Promise((r) => setTimeout(r, 300));
 
       setTransferId(data.transfer?.id ?? null);
-      setPendingReview(data.transfer?.status === "pending_approval");
+      const awaitingReview = data.transfer?.status === "pending_approval";
+      setPendingReview(awaitingReview);
       setStatusMessage(
-        data.transfer?.member_message ?? "Transfer completed successfully."
+        data.transfer?.member_message ??
+          (awaitingReview
+            ? "Your transfer is awaiting administrator review. No funds have been deducted from your account yet."
+            : "Transfer completed successfully.")
       );
       setStep("success");
       setPin("");
@@ -317,8 +460,11 @@ export function TransferFlow() {
     } catch (error) {
       const timedOut =
         error instanceof DOMException && error.name === "AbortError";
-      setProgress(60);
+      const failAt = 55 + Math.floor(Math.random() * 11);
+      setProgress(failAt);
+      setFailedProgress(failAt);
       await new Promise((r) => setTimeout(r, 400));
+      setTransferPaused(false);
       setStatusMessage(
         timedOut
           ? "This transfer is taking too long to complete. Please wait a moment, check your account activity, and try again if the transfer did not post."
@@ -339,6 +485,8 @@ export function TransferFlow() {
   function retryTransfer() {
     setStep("pin");
     setProgress(0);
+    setFailedProgress(60);
+    setTransferPaused(false);
     setError(null);
     setStatusMessage("");
     setProcessingSlow(false);
@@ -349,6 +497,8 @@ export function TransferFlow() {
   function resetFlow() {
     setStep("details");
     setProgress(0);
+    setFailedProgress(60);
+    setTransferPaused(false);
     setAmount("");
     setPin("");
     setTransferId(null);
@@ -393,7 +543,11 @@ export function TransferFlow() {
               <Label>From Account</Label>
               <select
                 value={sourceAccountId}
-                onChange={(e) => setSourceAccountId(e.target.value)}
+                onChange={(e) => {
+                  const nextSourceId = e.target.value;
+                  setSourceAccountId(nextSourceId);
+                  syncDestinationForSource(nextSourceId);
+                }}
                 className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
               >
                 {accounts.map((account) => (
@@ -408,19 +562,29 @@ export function TransferFlow() {
             {type === "internal" && (
               <div className="space-y-2">
                 <Label>To Account</Label>
-                <select
-                  value={destinationAccountId}
-                  onChange={(e) => setDestinationAccountId(e.target.value)}
-                  className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
-                >
-                  {accounts
-                    .filter((a) => a.id !== sourceAccountId)
-                    .map((account) => (
+                {internalDestinationAccounts.length === 0 ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Add another active checking or savings account, or fund a loan
+                    disbursement account, to move money internally.
+                  </p>
+                ) : (
+                  <select
+                    value={destinationAccountId}
+                    onChange={(e) => setDestinationAccountId(e.target.value)}
+                    className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                    required
+                  >
+                    <option value="">Select account</option>
+                    {internalDestinationAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.type} ••••{account.account_number.slice(-4)}
+                        {formatTransferAccountLabel(account)}
+                        {account.available_balance !== undefined
+                          ? ` — ${formatCurrency(account.available_balance)}`
+                          : ""}
                       </option>
                     ))}
-                </select>
+                  </select>
+                )}
               </div>
             )}
 
@@ -439,7 +603,7 @@ export function TransferFlow() {
               <>
                 {type !== "internal" && (
                   <div className="space-y-2">
-                    <Label>Receiver / Beneficiary Name</Label>
+                    <Label>Receiver name</Label>
                     <Input
                       value={beneficiaryName}
                       onChange={(e) => setBeneficiaryName(e.target.value)}
@@ -472,20 +636,28 @@ export function TransferFlow() {
                         required
                       />
                     </div>
-                  </div>
-                )}
-                {type === "local_wire" && (
-                  <div className="space-y-2">
-                    <Label>Receiver Bank</Label>
-                    <Input
-                      value={beneficiaryBank}
-                      onChange={(e) => setBeneficiaryBank(e.target.value)}
-                      className="rounded-xl"
-                    />
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Receiver Bank</Label>
+                      <Input
+                        value={beneficiaryBank}
+                        onChange={(e) => setBeneficiaryBank(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
                   </div>
                 )}
                 {type === "international_wire" && (
                   <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Receiver Bank</Label>
+                      <Input
+                        value={beneficiaryBank}
+                        onChange={(e) => setBeneficiaryBank(e.target.value)}
+                        className="rounded-xl"
+                        required
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label>SWIFT / BIC</Label>
                       <Input
@@ -505,13 +677,20 @@ export function TransferFlow() {
                       />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>Country</Label>
-                      <Input
+                      <Label>Destination Country</Label>
+                      <select
                         value={wireCountry}
                         onChange={(e) => setWireCountry(e.target.value)}
-                        className="rounded-xl"
+                        className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
                         required
-                      />
+                      >
+                        <option value="">Select country</option>
+                        {WIRE_COUNTRIES.map((country) => (
+                          <option key={country} value={country}>
+                            {country}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 )}
@@ -520,13 +699,9 @@ export function TransferFlow() {
 
             <div className="space-y-2">
               <Label>Amount</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
+              <AmountInput
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="rounded-xl"
+                onChange={setAmount}
                 required
               />
             </div>
@@ -543,7 +718,14 @@ export function TransferFlow() {
 
             <Button
               type="button"
-              onClick={() => (isZelle ? setStep("pin") : goToPin())}
+              onClick={() => {
+                if (isZelle) {
+                  if (!validateDetails()) return;
+                  setStep("pin");
+                  return;
+                }
+                goToPin();
+              }}
               className="w-full bg-northium-primary hover:bg-northium-secondary"
             >
               Continue
@@ -566,7 +748,12 @@ export function TransferFlow() {
             {[
               ["Type", summary.typeLabel],
               ["From", summary.from],
-              ["Receiver", summary.beneficiary],
+              ...(summary.to ? [["To", summary.to] as const] : []),
+              ...(type !== "internal"
+                ? ([["Receiver", summary.beneficiary]] as const)
+                : []),
+              ...(summary.bank ? [["Bank", summary.bank] as const] : []),
+              ...(summary.country ? [["Country", summary.country] as const] : []),
               ["Amount", formatCurrency(summary.amount)],
             ].map(([label, value]) => (
               <div
@@ -756,21 +943,31 @@ export function TransferFlow() {
                   cy="60"
                   r="52"
                   fill="none"
-                  stroke="#DC2626"
+                  stroke={transferPaused ? "#FCD34D" : "#DC2626"}
                   strokeWidth="10"
                   strokeLinecap="round"
                   strokeDasharray={326.7}
-                  strokeDashoffset={326.7 - (326.7 * 60) / 100}
+                  strokeDashoffset={326.7 - (326.7 * failedProgress) / 100}
                 />
               </svg>
-              <span className="absolute inset-0 flex items-center justify-center font-heading text-2xl font-bold text-red-600">
-                !
+              <span
+                className={`absolute inset-0 flex items-center justify-center font-heading text-2xl font-bold ${
+                  transferPaused ? "text-amber-600" : "text-red-600"
+                }`}
+              >
+                {failedProgress}%
               </span>
             </div>
-            <XCircle className="mx-auto size-12 text-red-600" />
+            <XCircle
+              className={`mx-auto size-12 ${
+                transferPaused ? "text-amber-600" : "text-red-600"
+              }`}
+            />
             <div>
               <h2 className="font-heading text-xl font-bold text-northium-primary">
-                Transfer Could Not Be Completed
+                {transferPaused
+                  ? TRANSACTION_INCOMPLETE_TITLE
+                  : "Transfer Could Not Be Completed"}
               </h2>
               <p className="mt-2 text-sm text-northium-muted">{statusMessage}</p>
             </div>
@@ -797,13 +994,49 @@ export function TransferFlow() {
       {step === "success" && (
         <Card className="rounded-2xl border-northium-border py-10 text-center shadow-sm">
           <CardContent className="space-y-6">
-            <CheckCircle2 className="mx-auto size-14 text-northium-success" />
+            {pendingReview ? (
+              <Clock3 className="mx-auto size-14 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="mx-auto size-14 text-northium-success" />
+            )}
             <div>
               <h2 className="font-heading text-xl font-bold text-northium-primary">
                 {pendingReview ? "Submitted for Review" : "Transfer Successful"}
               </h2>
               <p className="mt-2 text-sm text-northium-muted">{statusMessage}</p>
             </div>
+
+            {pendingReview && (
+              <div className="mx-auto max-w-md rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-left text-sm text-amber-950">
+                <p className="font-semibold">No funds have been moved yet</p>
+                <p className="mt-2 leading-relaxed">
+                  Your transfer request was received and is waiting for administrator
+                  approval. Your account balance will not change until the review is
+                  complete. You will be notified when it is approved or declined.
+                </p>
+                <div className="mt-4 space-y-2 border-t border-amber-200/80 pt-4 text-amber-900">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-amber-800">Type</span>
+                    <span className="font-medium">{summary.typeLabel}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-amber-800">From</span>
+                    <span className="font-medium">{summary.from}</span>
+                  </div>
+                  {summary.to && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-amber-800">To</span>
+                      <span className="font-medium">{summary.to}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4">
+                    <span className="text-amber-800">Amount</span>
+                    <span className="font-medium">{formatCurrency(summary.amount)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {transferId && !pendingReview && (
               <Button variant="outline" nativeButton={false} render={
                 <a href={`/api/member/transfers/${transferId}/receipt`} download />

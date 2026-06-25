@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { adminButtonNeutral } from "@/components/admin/admin-button-styles";
 import { Button } from "@/components/ui/button";
 
 type AuditLogRow = {
@@ -69,7 +70,7 @@ export function AdminSecurityPanel() {
         <Button
           variant="outline"
           onClick={() => void load()}
-          className="border-white/20 bg-transparent text-white hover:bg-white/10"
+          className={adminButtonNeutral}
         >
           Refresh
         </Button>

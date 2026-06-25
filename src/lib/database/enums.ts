@@ -45,6 +45,7 @@ export const ACCOUNT_TYPES = [
   "youth",
   "business",
   "retirement",
+  "loan",
 ] as const;
 
 export type AccountType = (typeof ACCOUNT_TYPES)[number];

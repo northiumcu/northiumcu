@@ -11,7 +11,7 @@ export function MemberDashboardClient() {
   useEffect(() => {
     void Promise.all([
       fetch("/api/member/accounts").then((r) => r.json()),
-      fetch("/api/member/transactions").then((r) => r.json()),
+      fetch("/api/member/transactions?page=1&limit=20").then((r) => r.json()),
     ]).then(([accountData, txData]) => {
       setAccounts(accountData.accounts ?? []);
       setTransactions(txData.transactions ?? []);

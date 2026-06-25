@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildStatementPdf } from "@/lib/banking/pdf-documents";
+import { transactionLedgerType } from "@/lib/banking/transaction-ledger";
 
 export async function GET(request: Request) {
   try {
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
 
     const { data: transactions, error: txError } = await admin
       .from("transactions")
-      .select("amount, type, description, posted_at, created_at")
+      .select("amount, type, description, posted_at, created_at, ledger_direction")
       .eq("account_id", accountId)
       .eq("status", "posted")
       .gte("posted_at", fromDate.toISOString())
@@ -61,12 +62,11 @@ export async function GET(request: Request) {
       .eq("id", user.id)
       .single();
 
-    const creditTypes = new Set(["deposit", "interest", "refund", "adjustment"]);
     const rows = (transactions ?? []).map((tx) => ({
       date: new Date(tx.posted_at ?? tx.created_at).toLocaleDateString(),
       description: tx.description,
       amount: Number(tx.amount),
-      type: creditTypes.has(tx.type) ? ("credit" as const) : ("debit" as const),
+      type: transactionLedgerType(tx),
     }));
 
     let running = Number(account.balance);

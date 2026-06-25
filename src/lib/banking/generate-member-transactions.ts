@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import {
+  defaultPeriodEnd,
+  defaultPeriodStart,
+  formatCalendarDate,
+  isWeekend,
+  resolveActivityPeriod,
+  snapPayrollToWeekday,
+  type DateRange,
+} from "@/lib/banking/transaction-generation-dates";
+import {
   buildDebitDescription,
   debitAmountForCategory,
   normalizeState,
@@ -38,7 +47,7 @@ export const PAYROLL_FREQUENCY_OPTIONS: {
   {
     value: "bi_weekly",
     label: "Bi-weekly",
-    description: "Payroll every 14 days",
+    description: "Payroll every 14 days (Fridays)",
   },
   { value: "monthly", label: "Monthly", description: "Payroll on the same day each month" },
 ];
@@ -70,32 +79,8 @@ type PlannedTransaction = {
   postedAt: Date;
 };
 
-type DateRange = {
-  start: Date;
-  end: Date;
-};
-
-const MAX_RANGE_DAYS = 3650;
-
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function formatCalendarDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function defaultPeriodEnd(): string {
-  return formatCalendarDate(new Date());
-}
-
-function defaultPeriodStart(): string {
-  const date = new Date();
-  date.setDate(date.getDate() - 60);
-  return formatCalendarDate(date);
 }
 
 export function defaultActivityPeriod(): { periodStart: string; periodEnd: string } {
@@ -104,6 +89,8 @@ export function defaultActivityPeriod(): { periodStart: string; periodEnd: strin
     periodEnd: defaultPeriodEnd(),
   };
 }
+
+export { resolveActivityPeriod, snapPayrollToWeekday } from "@/lib/banking/transaction-generation-dates";
 
 export function defaultPayrollSettings(): PayrollSettings {
   return {
@@ -151,56 +138,6 @@ export function resolvePayrollSettings(input: {
     maxAmount: roundMoney(maxAmount),
     frequency,
   };
-}
-
-function parseCalendarDate(value: string, boundary: "start" | "end"): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  if (!match) {
-    throw new Error("Use a valid date in YYYY-MM-DD format.");
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const date = new Date(year, month, day);
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month ||
-    date.getDate() !== day
-  ) {
-    throw new Error("Use a valid calendar date.");
-  }
-
-  if (boundary === "start") {
-    date.setHours(0, 0, 0, 0);
-  } else {
-    date.setHours(23, 59, 59, 999);
-  }
-
-  return date;
-}
-
-export function resolveActivityPeriod(
-  periodStart?: string,
-  periodEnd?: string
-): DateRange {
-  const startValue = periodStart?.trim() || defaultPeriodStart();
-  const endValue = periodEnd?.trim() || defaultPeriodEnd();
-  const start = parseCalendarDate(startValue, "start");
-  const end = parseCalendarDate(endValue, "end");
-
-  if (start.getTime() > end.getTime()) {
-    throw new Error("Activity period start must be on or before the end date.");
-  }
-
-  const rangeDays =
-    Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  if (rangeDays > MAX_RANGE_DAYS) {
-    throw new Error(`Activity period cannot exceed ${MAX_RANGE_DAYS} days.`);
-  }
-
-  return { start, end };
 }
 
 function dateKey(date: Date): string {
@@ -256,7 +193,7 @@ function collectPayrollScheduleSlots(
       cursor.setMinutes(0, 0, 0);
       while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
         const hour = cursor.getHours();
-        if (hour >= 6 && hour <= 22) {
+        if (!isWeekend(cursor) && hour >= 6 && hour <= 22) {
           slots.push(new Date(cursor));
         }
         cursor.setHours(cursor.getHours() + 1);
@@ -267,7 +204,9 @@ function collectPayrollScheduleSlots(
       const cursor = new Date(range.start);
       cursor.setHours(10, 0, 0, 0);
       while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
-        slots.push(new Date(cursor));
+        if (!isWeekend(cursor)) {
+          slots.push(new Date(cursor));
+        }
         cursor.setDate(cursor.getDate() + 1);
       }
       break;
@@ -281,8 +220,7 @@ function collectPayrollScheduleSlots(
       return slots.reverse();
     }
     case "bi_weekly": {
-      let cursor = new Date(range.end);
-      cursor.setHours(10, 0, 0, 0);
+      let cursor = findLastWeekday(range, 5);
       while (cursor.getTime() >= range.start.getTime() && slots.length < maxSlots) {
         slots.push(new Date(cursor));
         cursor.setDate(cursor.getDate() - 14);
@@ -295,7 +233,14 @@ function collectPayrollScheduleSlots(
       cursor.setHours(10, 0, 0, 0);
 
       while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
-        slots.push(new Date(cursor));
+        const payDate = snapPayrollToWeekday(new Date(cursor));
+        payDate.setHours(10, 0, 0, 0);
+        if (
+          payDate.getTime() >= range.start.getTime() &&
+          payDate.getTime() <= range.end.getTime()
+        ) {
+          slots.push(payDate);
+        }
         cursor.setMonth(cursor.getMonth() + 1);
         const lastDay = new Date(
           cursor.getFullYear(),
@@ -325,19 +270,36 @@ function payrollDatesInRange(
   if (scheduleSlots.length > 0) {
     const hourMin = frequency === "hourly" ? 6 : 9;
     const hourMax = frequency === "hourly" ? 22 : 11;
-    return pickEvenlySpacedDates(scheduleSlots, count).map((date) =>
-      clampToRange(
-        frequency === "hourly" ? date : withRandomTime(date, hourMin, hourMax),
+    return pickEvenlySpacedDates(scheduleSlots, count).map((date) => {
+      const weekday =
+        frequency === "hourly" ? date : snapPayrollToWeekday(date);
+      return clampToRange(
+        frequency === "hourly"
+          ? weekday
+          : withRandomTime(weekday, hourMin, hourMax),
         range
-      )
-    );
+      );
+    });
   }
 
   return spreadDatesAcrossRange(count, range, {
     hourMin: 9,
     hourMax: 11,
-    preferWeekdays: frequency !== "hourly" && frequency !== "daily",
-  });
+    preferWeekdays: true,
+  }).map((date) =>
+    clampToRange(withRandomTime(snapPayrollToWeekday(date), 9, 11), range)
+  );
+}
+
+function calendarDaysInRange(range: DateRange): number {
+  const start = new Date(range.start);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(range.end);
+  end.setHours(0, 0, 0, 0);
+  return Math.max(
+    1,
+    Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1
+  );
 }
 
 function spreadDatesAcrossRange(
@@ -357,43 +319,94 @@ function spreadDatesAcrossRange(
   const startMs = range.start.getTime();
   const endMs = range.end.getTime();
   const span = Math.max(endMs - startMs, 60 * 60 * 1000);
-  const idealGap = span / count;
+  const rangeDays = calendarDaysInRange(range);
   const used = new Set(options.avoidDateKeys ?? []);
   const results: Date[] = [];
+
+  const preferDistinctDays = count <= rangeDays;
 
   for (let i = 0; i < count; i += 1) {
     let placed = false;
 
-    for (let attempt = 0; attempt < 48; attempt += 1) {
-      const anchor = startMs + idealGap * (i + 0.5);
-      const jitter = (Math.random() - 0.5) * idealGap * 0.9;
-      let candidate = new Date(anchor + jitter);
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      let candidate: Date;
 
-      if (options.preferWeekdays) {
-        const day = candidate.getDay();
-        if (day === 0) candidate.setDate(candidate.getDate() + 1);
-        if (day === 6) candidate.setDate(candidate.getDate() - 1);
+      if (preferDistinctDays) {
+        const dayIndex =
+          count === 1
+            ? Math.floor((rangeDays - 1) / 2)
+            : Math.round((i / (count - 1)) * (rangeDays - 1));
+        candidate = new Date(range.start);
+        candidate.setHours(0, 0, 0, 0);
+        candidate.setDate(candidate.getDate() + dayIndex);
+
+        if (options.preferWeekdays) {
+          const day = candidate.getDay();
+          if (day === 0) candidate.setDate(candidate.getDate() + 1);
+          if (day === 6) candidate.setDate(candidate.getDate() - 1);
+        }
+
+        candidate = withRandomTime(
+          clampToRange(candidate, range),
+          hourMin,
+          hourMax
+        );
+      } else {
+        const idealGap = span / count;
+        const anchor = startMs + idealGap * (i + 0.5);
+        const jitter = (Math.random() - 0.5) * idealGap * 0.2;
+        candidate = new Date(anchor + jitter);
+
+        if (options.preferWeekdays) {
+          const day = candidate.getDay();
+          if (day === 0) candidate.setDate(candidate.getDate() + 1);
+          if (day === 6) candidate.setDate(candidate.getDate() - 1);
+        }
+
+        candidate = clampToRange(
+          withRandomTime(candidate, hourMin, hourMax),
+          range
+        );
       }
 
-      candidate = clampToRange(candidate, range);
       const key = dateKey(candidate);
-      const allowReuse = attempt > 24;
+      const allowReuse = attempt > 32 || !preferDistinctDays;
 
       if (!used.has(key) || allowReuse) {
-        const dated = clampToRange(withRandomTime(candidate, hourMin, hourMax), range);
-        results.push(dated);
-        used.add(dateKey(dated));
+        results.push(candidate);
+        used.add(key);
         placed = true;
         break;
+      }
+
+      if (preferDistinctDays) {
+        candidate = new Date(candidate);
+        candidate.setDate(candidate.getDate() + 1 + (attempt % 3));
+        candidate = clampToRange(
+          withRandomTime(candidate, hourMin, hourMax),
+          range
+        );
+        const shiftedKey = dateKey(candidate);
+        if (!used.has(shiftedKey) || attempt > 40) {
+          results.push(candidate);
+          used.add(shiftedKey);
+          placed = true;
+          break;
+        }
       }
     }
 
     if (!placed) {
       const fallback = clampToRange(
-        withRandomTime(new Date(startMs + idealGap * i), hourMin, hourMax),
+        withRandomTime(
+          new Date(startMs + (span / count) * i),
+          hourMin,
+          hourMax
+        ),
         range
       );
       results.push(fallback);
+      used.add(dateKey(fallback));
     }
   }
 
@@ -487,12 +500,14 @@ function planCredits(
 function planDebits(
   debitCount: number,
   state: string,
-  range: DateRange
+  range: DateRange,
+  avoidDateKeys?: Set<string>
 ): PlannedTransaction[] {
   const dates = spreadDatesAcrossRange(debitCount, range, {
     hourMin: 7,
     hourMax: 21,
     preferWeekdays: false,
+    avoidDateKeys,
   });
 
   return dates.map((postedAt) => {
@@ -595,7 +610,8 @@ export async function generateMemberTransactions(
 
   const startingBalance = await getAccountBalance(admin, input.accountId);
   const credits = planCredits(creditCount, company, range, payroll);
-  const debits = planDebits(debitCount, state, range);
+  const creditDateKeys = new Set(credits.map((tx) => dateKey(tx.postedAt)));
+  const debits = planDebits(debitCount, state, range, creditDateKeys);
 
   const totalCreditAmount = roundMoney(
     credits.reduce((sum, tx) => sum + tx.amount, 0)
@@ -619,6 +635,7 @@ export async function generateMemberTransactions(
       type: tx.type,
       description: tx.description,
       postedAt: tx.postedAt,
+      skipMemberEmail: true,
     });
   }
 

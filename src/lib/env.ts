@@ -50,6 +50,9 @@ function validateEnv(): Env {
     const requiredInProduction = [
       "NEXT_PUBLIC_SUPABASE_URL",
       "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "AUTH_ENCRYPTION_KEY",
+      "RESEND_API_KEY",
     ] as const;
 
     for (const key of requiredInProduction) {

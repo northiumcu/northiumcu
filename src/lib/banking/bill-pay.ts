@@ -15,12 +15,14 @@ export type BillPayPayeeRecord = {
   updated_at: string;
 };
 
+/** Internal placeholder — routing is not collected from members for bill pay. */
+export const BILL_PAY_INTERNAL_ROUTING = "000000000";
+
 export type BillPayPayeeView = {
   id: string;
   nickname: string;
   payeeName: string;
   accountLastFour: string;
-  routingNumber: string;
   category: string | null;
   isActive: boolean;
   createdAt: string;
@@ -32,7 +34,6 @@ export function toBillPayPayeeView(payee: BillPayPayeeRecord): BillPayPayeeView 
     nickname: payee.nickname,
     payeeName: payee.payee_name,
     accountLastFour: payee.account_last_four,
-    routingNumber: payee.routing_number,
     category: payee.category,
     isActive: payee.is_active,
     createdAt: payee.created_at,

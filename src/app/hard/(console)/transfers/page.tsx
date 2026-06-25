@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  adminButtonDanger,
+  adminButtonNeutral,
+  adminButtonPrimary,
+} from "@/components/admin/admin-button-styles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -128,7 +133,7 @@ export default function AdminTransfersPage() {
                     <div className="flex flex-wrap justify-end gap-1">
                       <Button
                         size="sm"
-                        className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+                        className={adminButtonPrimary}
                         onClick={() => void decide(t.id, "approved")}
                       >
                         Approve
@@ -136,7 +141,7 @@ export default function AdminTransfersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-white/20 text-white hover:bg-white/5"
+                        className={adminButtonNeutral}
                         onClick={() => void decide(t.id, "delayed")}
                       >
                         Delay
@@ -144,7 +149,7 @@ export default function AdminTransfersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-white/20 text-white hover:bg-white/5"
+                        className={adminButtonNeutral}
                         onClick={() => void decide(t.id, "pending")}
                       >
                         Pending
@@ -152,7 +157,7 @@ export default function AdminTransfersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-red-400/40 text-red-300 hover:bg-red-500/10"
+                        className={adminButtonDanger}
                         onClick={() => void decide(t.id, "denied")}
                       >
                         Deny

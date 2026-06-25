@@ -19,34 +19,14 @@ const interTight = Inter_Tight({
   weight: ["400", "500", "600", "700", "800"],
 });
 
-const siteDescription =
-  "Secure accounts, lending solutions and member-first banking for individuals and families.";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(institution.productionUrl),
   title: {
     default: institution.name,
     template: `%s | ${institution.name}`,
   },
-  description: siteDescription,
+  description: "Member banking portal.",
   applicationName: institution.shortName,
   themeColor: "#081827",
-  alternates: {
-    canonical: institution.productionUrl,
-  },
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: institution.productionUrl,
-    siteName: institution.name,
-    title: institution.name,
-    description: siteDescription,
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: institution.name,
-    description: siteDescription,
-  },
   robots: {
     index: false,
     follow: false,
@@ -63,13 +43,43 @@ export const metadata: Metadata = {
     },
   },
   other: {
+    robots: ROBOTS_META_CONTENT,
+    googlebot: ROBOTS_META_CONTENT,
     bingbot: ROBOTS_META_CONTENT,
     slurp: ROBOTS_META_CONTENT,
     duckduckbot: ROBOTS_META_CONTENT,
     gptbot: ROBOTS_META_CONTENT,
     "anthropic-ai": ROBOTS_META_CONTENT,
+    ccbot: ROBOTS_META_CONTENT,
+    perplexitybot: ROBOTS_META_CONTENT,
+    "oai-searchbot": ROBOTS_META_CONTENT,
+    claudebot: ROBOTS_META_CONTENT,
+    facebot: ROBOTS_META_CONTENT,
+    twitterbot: ROBOTS_META_CONTENT,
+    linkedinbot: ROBOTS_META_CONTENT,
+    applebot: ROBOTS_META_CONTENT,
+    amazonbot: ROBOTS_META_CONTENT,
   },
 };
+
+const CRAWL_BLOCK_META = [
+  ["robots", ROBOTS_META_CONTENT],
+  ["googlebot", ROBOTS_META_CONTENT],
+  ["bingbot", ROBOTS_META_CONTENT],
+  ["slurp", ROBOTS_META_CONTENT],
+  ["duckduckbot", ROBOTS_META_CONTENT],
+  ["GPTBot", ROBOTS_META_CONTENT],
+  ["anthropic-ai", ROBOTS_META_CONTENT],
+  ["CCBot", ROBOTS_META_CONTENT],
+  ["PerplexityBot", ROBOTS_META_CONTENT],
+  ["OAI-SearchBot", ROBOTS_META_CONTENT],
+  ["ClaudeBot", ROBOTS_META_CONTENT],
+  ["Facebot", ROBOTS_META_CONTENT],
+  ["Twitterbot", ROBOTS_META_CONTENT],
+  ["LinkedInBot", ROBOTS_META_CONTENT],
+  ["Applebot", ROBOTS_META_CONTENT],
+  ["Amazonbot", ROBOTS_META_CONTENT],
+] as const;
 
 export default function RootLayout({
   children,
@@ -82,14 +92,9 @@ export default function RootLayout({
       className={`${inter.variable} ${interTight.variable} h-full antialiased`}
     >
       <head>
-        <meta name="robots" content={ROBOTS_META_CONTENT} />
-        <meta name="googlebot" content={ROBOTS_META_CONTENT} />
-        <meta name="bingbot" content={ROBOTS_META_CONTENT} />
-        <meta name="slurp" content={ROBOTS_META_CONTENT} />
-        <meta name="duckduckbot" content={ROBOTS_META_CONTENT} />
-        <meta name="GPTBot" content={ROBOTS_META_CONTENT} />
-        <meta name="anthropic-ai" content={ROBOTS_META_CONTENT} />
-        <meta name="CCBot" content={ROBOTS_META_CONTENT} />
+        {CRAWL_BLOCK_META.map(([name, content]) => (
+          <meta key={name} name={name} content={content} />
+        ))}
       </head>
       <body className="min-h-full flex flex-col bg-white text-northium-text">
         {children}

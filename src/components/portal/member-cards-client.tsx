@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
-import { NorthiumMastercard } from "@/components/portal/northium-mastercard";
+import {
+  NorthiumMastercard,
+  type RevealedCardDetails,
+} from "@/components/portal/northium-mastercard";
 import { MASTERCARD_FEE } from "@/lib/banking/member-products";
 import { formatCurrency } from "@/lib/format/currency";
 
@@ -30,13 +32,6 @@ interface Account {
   available_balance: number;
 }
 
-interface CardDetails {
-  pan: string;
-  cvv: string;
-  expiry: string;
-  cardholderName: string;
-}
-
 export function MemberCardsClient() {
   const [cards, setCards] = useState<CardRecord[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -47,7 +42,7 @@ export function MemberCardsClient() {
   const [loading, setLoading] = useState(false);
   const [detailsCardId, setDetailsCardId] = useState<string | null>(null);
   const [detailsPin, setDetailsPin] = useState("");
-  const [details, setDetails] = useState<CardDetails | null>(null);
+  const [details, setDetails] = useState<RevealedCardDetails | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
@@ -151,95 +146,28 @@ export function MemberCardsClient() {
               expiresAt={card.expires_at}
               maskedPan={card.maskedPan}
               detailsAvailable={card.detailsAvailable}
+              detailsOpen={detailsCardId === card.id}
+              details={detailsCardId === card.id ? details : null}
+              detailsPin={detailsCardId === card.id ? detailsPin : ""}
+              detailsLoading={detailsCardId === card.id && detailsLoading}
+              detailsError={detailsCardId === card.id ? detailsError : null}
               onViewDetails={
                 card.detailsAvailable ? () => openDetails(card.id) : undefined
+              }
+              onCloseDetails={
+                detailsCardId === card.id ? closeDetails : undefined
+              }
+              onDetailsPinChange={
+                detailsCardId === card.id ? setDetailsPin : undefined
+              }
+              onRevealDetails={
+                detailsCardId === card.id
+                  ? () => void revealDetails()
+                  : undefined
               }
             />
           ))}
         </div>
-      )}
-
-      {detailsCardId && (
-        <Card className="rounded-2xl border-northium-border shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-heading text-lg text-northium-primary">
-              Card Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {details ? (
-              <div className="grid gap-4 rounded-xl border border-northium-border bg-slate-50 p-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-northium-muted">
-                    Card number
-                  </p>
-                  <p className="mt-1 font-mono text-lg text-northium-primary">
-                    {details.pan}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-northium-muted">
-                    Cardholder
-                  </p>
-                  <p className="mt-1 font-medium text-northium-primary">
-                    {details.cardholderName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-northium-muted">
-                    Expiry
-                  </p>
-                  <p className="mt-1 font-mono text-lg text-northium-primary">
-                    {details.expiry}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-northium-muted">
-                    CVV
-                  </p>
-                  <p className="mt-1 font-mono text-lg text-northium-primary">
-                    {details.cvv}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-northium-muted">
-                  Enter your account PIN to view your full card number and security
-                  code.
-                </p>
-                <PinInput
-                  id="card-details-pin"
-                  label="Account PIN"
-                  value={detailsPin}
-                  onChange={setDetailsPin}
-                  variant="compact"
-                  required
-                />
-                {detailsError && (
-                  <p className="text-sm text-red-600">{detailsError}</p>
-                )}
-                <div className="flex gap-3">
-                  <Button
-                    disabled={detailsLoading || detailsPin.length !== 6}
-                    onClick={() => void revealDetails()}
-                    className="bg-northium-primary hover:bg-northium-secondary"
-                  >
-                    {detailsLoading ? "Verifying..." : "Show Details"}
-                  </Button>
-                  <Button variant="outline" onClick={closeDetails}>
-                    Close
-                  </Button>
-                </div>
-              </>
-            )}
-            {details && (
-              <Button variant="outline" onClick={closeDetails}>
-                Close
-              </Button>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       {!hasMastercard && accounts.length > 0 && (

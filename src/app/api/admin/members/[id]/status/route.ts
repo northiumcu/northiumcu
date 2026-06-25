@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import { sendAccountStatusEmail } from "@/lib/email/member-alerts";
 import {
   logAdminAction,
   requestAuditContext,
@@ -78,6 +79,19 @@ export async function PATCH(
         message: notification.message,
         category: "security",
       });
+
+      if (
+        memberStatus === "paused" ||
+        memberStatus === "suspended" ||
+        memberStatus === "active"
+      ) {
+        await sendAccountStatusEmail(admin, {
+          memberId: id,
+          firstName: data.first_name?.trim() || "Member",
+          status: memberStatus,
+          note,
+        });
+      }
     }
 
     const audit = requestAuditContext(request);

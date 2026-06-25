@@ -1,11 +1,15 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import { formatCurrency } from "@/lib/format/currency";
-import { formatHeadquartersAddress, institution } from "@/lib/institution";
-
-const navy = rgb(0.031, 0.094, 0.153);
-const gold = rgb(0.831, 0.651, 0.29);
-const muted = rgb(0.4, 0.44, 0.52);
-const text = rgb(0.043, 0.071, 0.125);
+import { institution } from "@/lib/institution";
+import {
+  createPdfFonts,
+  drawDetailPanel,
+  drawFintechLetterhead,
+  drawFooter,
+  PDF_PAGE_SIZE,
+  text,
+  muted,
+} from "@/lib/banking/pdf-letterhead";
 
 type StatementRow = {
   date: string;
@@ -13,87 +17,6 @@ type StatementRow = {
   amount: number;
   type: "credit" | "debit";
 };
-
-async function drawLetterhead(
-  page: ReturnType<PDFDocument["addPage"]>,
-  fonts: { bold: Awaited<ReturnType<PDFDocument["embedFont"]>>; regular: Awaited<ReturnType<PDFDocument["embedFont"]>> },
-  title: string,
-  subtitle?: string
-) {
-  const { width, height } = page.getSize();
-  page.drawRectangle({ x: 0, y: height - 88, width, height: 88, color: navy });
-  page.drawRectangle({ x: 0, y: height - 92, width, height: 4, color: gold });
-  page.drawText(institution.name, {
-    x: 48,
-    y: height - 42,
-    size: 16,
-    font: fonts.bold,
-    color: rgb(1, 1, 1),
-  });
-  page.drawText(institution.tagline, {
-    x: 48,
-    y: height - 58,
-    size: 9,
-    font: fonts.regular,
-    color: rgb(0.85, 0.85, 0.85),
-  });
-  page.drawText(formatHeadquartersAddress(), {
-    x: width - 280,
-    y: height - 42,
-    size: 8,
-    font: fonts.regular,
-    color: rgb(0.85, 0.85, 0.85),
-  });
-  page.drawText(institution.supportEmail, {
-    x: width - 280,
-    y: height - 54,
-    size: 8,
-    font: fonts.regular,
-    color: rgb(0.85, 0.85, 0.85),
-  });
-  page.drawText(title, {
-    x: 48,
-    y: height - 118,
-    size: 18,
-    font: fonts.bold,
-    color: text,
-  });
-  if (subtitle) {
-    page.drawText(subtitle, {
-      x: 48,
-      y: height - 136,
-      size: 10,
-      font: fonts.regular,
-      color: muted,
-    });
-  }
-}
-
-function drawFooter(
-  page: ReturnType<PDFDocument["addPage"]>,
-  font: Awaited<ReturnType<PDFDocument["embedFont"]>>,
-  pageNum: number,
-  total: number
-) {
-  const { width } = page.getSize();
-  page.drawLine({
-    start: { x: 48, y: 48 },
-    end: { x: width - 48, y: 48 },
-    thickness: 0.5,
-    color: rgb(0.85, 0.87, 0.9),
-  });
-  page.drawText(
-    `${institution.name} · Member NCUA · This document is confidential.`,
-    { x: 48, y: 32, size: 7, font, color: muted }
-  );
-  page.drawText(`Page ${pageNum} of ${total}`, {
-    x: width - 100,
-    y: 32,
-    size: 7,
-    font,
-    color: muted,
-  });
-}
 
 export async function buildTransferReceiptPdf(data: {
   reference: string;
@@ -107,13 +30,17 @@ export async function buildTransferReceiptPdf(data: {
   memo?: string | null;
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const page = doc.addPage([612, 792]);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.addPage(PDF_PAGE_SIZE);
+  const fonts = await createPdfFonts(doc);
 
-  await drawLetterhead(page, { bold, regular }, "Transfer Confirmation", data.reference);
+  await drawFintechLetterhead(
+    doc,
+    page,
+    fonts,
+    "Transfer Confirmation",
+    `Reference ${data.reference}`
+  );
 
-  let y = 620;
   const rows: [string, string][] = [
     ["Member", data.memberName],
     ["From Account", data.accountMask],
@@ -121,41 +48,41 @@ export async function buildTransferReceiptPdf(data: {
     ["Beneficiary", data.beneficiary],
     ["Amount", formatCurrency(data.amount)],
     ["Status", data.status.toUpperCase()],
-    ["Date", new Date(data.completedAt).toLocaleString()],
+    ["Completed", new Date(data.completedAt).toLocaleString()],
   ];
   if (data.memo) rows.push(["Memo", data.memo]);
 
-  for (const [label, value] of rows) {
-    page.drawText(label, { x: 48, y, size: 9, font: bold, color: muted });
-    page.drawText(value, { x: 200, y, size: 10, font: regular, color: text });
-    y -= 28;
-  }
+  const noteY = drawDetailPanel(page, fonts, rows, 580);
 
   page.drawRectangle({
-    x: 48,
-    y: y - 40,
-    width: 516,
-    height: 56,
-    color: rgb(0.97, 0.98, 0.99),
-    borderColor: gold,
+    x: 40,
+    y: noteY - 72,
+    width: 532,
+    height: 64,
+    color: rgb(0.96, 0.98, 1),
+    borderColor: rgb(0.83, 0.65, 0.29),
     borderWidth: 1,
   });
-  page.drawText("This receipt confirms your authorized transfer.", {
-    x: 64,
-    y: y - 16,
-    size: 9,
-    font: regular,
+  page.drawText("Authorized transfer receipt", {
+    x: 56,
+    y: noteY - 28,
+    size: 10,
+    font: fonts.bold,
     color: text,
   });
+  page.drawText(
+    "This document confirms your authorized transfer. Retain for your records.",
+    { x: 56, y: noteY - 44, size: 9, font: fonts.regular, color: muted }
+  );
   page.drawText(`Questions? ${institution.supportEmail}`, {
-    x: 64,
-    y: y - 32,
+    x: 56,
+    y: noteY - 58,
     size: 8,
-    font: regular,
+    font: fonts.regular,
     color: muted,
   });
 
-  drawFooter(page, regular, 1, 1);
+  drawFooter(page, fonts.regular, 1, 1);
   return doc.save();
 }
 
@@ -169,65 +96,76 @@ export async function buildStatementPdf(data: {
   rows: StatementRow[];
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const fonts = await createPdfFonts(doc);
 
-  const page = doc.addPage([612, 792]);
-  await drawLetterhead(
-    page,
-    { bold, regular },
-    "Account Statement",
-    `${data.periodLabel} · ${data.accountType}`
-  );
+  const rowsPerPage = 28;
+  const totalPages = Math.max(1, Math.ceil(data.rows.length / rowsPerPage) || 1);
+  let rowIndex = 0;
 
-  let y = 600;
-  page.drawText(`Member: ${data.memberName}`, { x: 48, y, size: 10, font: regular, color: text });
-  y -= 16;
-  page.drawText(`Account: ${data.accountMask}`, { x: 48, y, size: 10, font: regular, color: text });
-  y -= 24;
-  page.drawText(`Opening Balance: ${formatCurrency(data.openingBalance)}`, {
-    x: 48,
-    y,
-    size: 10,
-    font: bold,
-    color: text,
-  });
-  page.drawText(`Closing Balance: ${formatCurrency(data.closingBalance)}`, {
-    x: 300,
-    y,
-    size: 10,
-    font: bold,
-    color: text,
-  });
-  y -= 32;
+  for (let pageNum = 0; pageNum < totalPages; pageNum += 1) {
+    const page = doc.addPage(PDF_PAGE_SIZE);
+    const { width } = page.getSize();
 
-  page.drawRectangle({ x: 48, y: y - 4, width: 516, height: 20, color: navy });
-  page.drawText("Date", { x: 56, y: y, size: 8, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("Description", { x: 140, y: y, size: 8, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("Amount", { x: 480, y: y, size: 8, font: bold, color: rgb(1, 1, 1) });
-  y -= 22;
+    await drawFintechLetterhead(
+      doc,
+      page,
+      fonts,
+      "Account Statement",
+      `${data.periodLabel} · ${data.accountType.replace(/_/g, " ")}`
+    );
 
-  for (const row of data.rows) {
-    if (y < 80) break;
-    const sign = row.type === "credit" ? "+" : "-";
-    page.drawText(row.date, { x: 56, y, size: 8, font: regular, color: text });
-    page.drawText(row.description.slice(0, 52), {
-      x: 140,
-      y,
-      size: 8,
-      font: regular,
-      color: text,
-    });
-    page.drawText(`${sign}${formatCurrency(row.amount)}`, {
-      x: 470,
-      y,
-      size: 8,
-      font: regular,
-      color: row.type === "credit" ? rgb(0.1, 0.5, 0.3) : text,
-    });
-    y -= 16;
+    let y = 560;
+    if (pageNum === 0) {
+      const summaryRows: [string, string][] = [
+        ["Member", data.memberName],
+        ["Account", data.accountMask],
+        ["Period", data.periodLabel],
+        ["Opening Balance", formatCurrency(data.openingBalance)],
+        ["Closing Balance", formatCurrency(data.closingBalance)],
+      ];
+      y = drawDetailPanel(page, fonts, summaryRows, 560) - 8;
+    }
+
+    page.drawRectangle({ x: 40, y: y - 4, width: width - 80, height: 22, color: rgb(0.031, 0.094, 0.153) });
+    page.drawText("Date", { x: 52, y: y + 2, size: 8, font: fonts.bold, color: rgb(1, 1, 1) });
+    page.drawText("Description", { x: 130, y: y + 2, size: 8, font: fonts.bold, color: rgb(1, 1, 1) });
+    page.drawText("Type", { x: 400, y: y + 2, size: 8, font: fonts.bold, color: rgb(1, 1, 1) });
+    page.drawText("Amount", { x: 480, y: y + 2, size: 8, font: fonts.bold, color: rgb(1, 1, 1) });
+    y -= 24;
+
+    const pageRows = data.rows.slice(rowIndex, rowIndex + rowsPerPage);
+    rowIndex += pageRows.length;
+
+    for (const row of pageRows) {
+      if (y < 72) break;
+      const sign = row.type === "credit" ? "+" : "-";
+      page.drawText(row.date, { x: 52, y, size: 8, font: fonts.regular, color: text });
+      page.drawText(row.description.slice(0, 48), {
+        x: 130,
+        y,
+        size: 8,
+        font: fonts.regular,
+        color: text,
+      });
+      page.drawText(row.type === "credit" ? "Credit" : "Debit", {
+        x: 400,
+        y,
+        size: 8,
+        font: fonts.regular,
+        color: muted,
+      });
+      page.drawText(`${sign}${formatCurrency(row.amount)}`, {
+        x: 468,
+        y,
+        size: 8,
+        font: fonts.bold,
+        color: row.type === "credit" ? rgb(0.1, 0.5, 0.3) : text,
+      });
+      y -= 18;
+    }
+
+    drawFooter(page, fonts.regular, pageNum + 1, totalPages);
   }
 
-  drawFooter(page, regular, 1, 1);
   return doc.save();
 }

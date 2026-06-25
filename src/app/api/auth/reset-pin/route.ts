@@ -2,9 +2,13 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPin, verifyOtp } from "@/lib/auth/crypto";
 import { resetPinSchema } from "@/lib/auth/validators";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:reset-pin", 8, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = resetPinSchema.safeParse(body);
     if (!parsed.success) {

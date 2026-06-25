@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TransactionType } from "@/lib/database/enums";
 import { buildTransactionReference } from "@/lib/banking/transaction-reference";
+import { sendPostedTransactionEmail } from "@/lib/email/member-alerts";
 
 type PostDirection = "credit" | "debit";
 
@@ -13,6 +14,21 @@ type PostTransactionInput = {
   reference?: string;
   postedAt?: Date;
   transferId?: string;
+  /** Skip member email (e.g. admin-generated historical activity). */
+  skipMemberEmail?: boolean;
+};
+
+type RpcResult = {
+  transaction: {
+    id: string;
+    amount: number;
+    type: string;
+    description: string;
+    posted_at: string;
+    created_at: string;
+  };
+  balance: number;
+  available_balance: number;
 };
 
 export async function postAccountTransaction(
@@ -24,71 +40,73 @@ export async function postAccountTransaction(
     throw new Error("Amount must be greater than zero.");
   }
 
-  const { data: account, error: accountError } = await admin
-    .from("accounts")
-    .select("id, balance, available_balance, status")
-    .eq("id", input.accountId)
-    .single();
-
-  if (accountError || !account) {
-    throw new Error("Account not found.");
-  }
-
-  if (account.status !== "active") {
-    throw new Error("Account is not active.");
-  }
-
-  const balance = Number(account.balance);
-  const available = Number(account.available_balance);
-  const delta = input.direction === "credit" ? amount : -amount;
-  const nextBalance = Math.round((balance + delta) * 100) / 100;
-  const nextAvailable = Math.round((available + delta) * 100) / 100;
-
-  if (nextBalance < 0 || nextAvailable < 0) {
-    throw new Error("Insufficient balance for this debit.");
-  }
-
   const txType: TransactionType =
     input.type ??
     (input.direction === "credit" ? "deposit" : "withdrawal");
 
   const postedAt = (input.postedAt ?? new Date()).toISOString();
 
-  const { data: transaction, error: txError } = await admin
-    .from("transactions")
-    .insert({
-      account_id: input.accountId,
-      amount,
-      type: txType,
-      status: "posted",
-      description: input.description,
-      reference: input.reference ?? buildTransactionReference(),
-      transfer_id: input.transferId ?? null,
-      posted_at: postedAt,
-    })
-    .select("id, amount, type, description, posted_at, created_at")
-    .single();
+  const { data, error } = await admin.rpc("post_account_transaction", {
+    p_account_id: input.accountId,
+    p_amount: amount,
+    p_direction: input.direction,
+    p_type: txType,
+    p_description: input.description,
+    p_reference: input.reference ?? buildTransactionReference(),
+    p_transfer_id: input.transferId ?? null,
+    p_posted_at: postedAt,
+  });
 
-  if (txError || !transaction) {
-    throw new Error(txError?.message ?? "Failed to post transaction.");
+  if (error) {
+    throw new Error(error.message);
   }
 
-  const { error: updateError } = await admin
-    .from("accounts")
-    .update({
-      balance: nextBalance,
-      available_balance: nextAvailable,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.accountId);
+  const result = data as RpcResult | null;
+  if (!result?.transaction) {
+    throw new Error("Failed to post transaction.");
+  }
 
-  if (updateError) {
-    throw new Error(updateError.message);
+  const shouldEmail =
+    !input.skipMemberEmail &&
+    !(txType === "transfer" && input.direction === "debit");
+
+  if (shouldEmail) {
+    await notifyPostedTransaction(admin, input, result);
   }
 
   return {
-    transaction,
-    balance: nextBalance,
-    available_balance: nextAvailable,
+    transaction: result.transaction,
+    balance: Number(result.balance),
+    available_balance: Number(result.available_balance),
   };
+}
+
+async function notifyPostedTransaction(
+  admin: SupabaseClient,
+  input: PostTransactionInput,
+  result: RpcResult
+) {
+  const { data: account } = await admin
+    .from("accounts")
+    .select("member_id, account_number")
+    .eq("id", input.accountId)
+    .single();
+
+  if (!account?.member_id || !account.account_number) return;
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("first_name")
+    .eq("id", account.member_id)
+    .single();
+
+  await sendPostedTransactionEmail(admin, {
+    memberId: account.member_id,
+    firstName: profile?.first_name?.trim() || "Member",
+    accountLastFour: account.account_number.slice(-4),
+    direction: input.direction,
+    amount: input.amount,
+    description: input.description,
+    postedAt: result.transaction.posted_at,
+  });
 }

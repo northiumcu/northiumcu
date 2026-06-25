@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveMemberWrite, requireAuthenticatedMember } from "@/lib/auth/require-member";
 import { billPayPayeeSchema } from "@/lib/auth/validators";
 import { encryptSensitive, lastFour } from "@/lib/auth/crypto";
-import { toBillPayPayeeView } from "@/lib/banking/bill-pay";
+import { BILL_PAY_INTERNAL_ROUTING, toBillPayPayeeView } from "@/lib/banking/bill-pay";
 
 async function assertBillPayEnabled(admin: ReturnType<typeof createAdminClient>, userId: string) {
   const { data: profile } = await admin
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
         member_id: auth.user.id,
         nickname: parsed.data.nickname,
         payee_name: parsed.data.payeeName,
-        routing_number: parsed.data.routingNumber,
+        routing_number: BILL_PAY_INTERNAL_ROUTING,
         account_number_encrypted: encryptSensitive(accountDigits),
         account_last_four: lastFour(accountDigits),
         category: parsed.data.category ?? null,

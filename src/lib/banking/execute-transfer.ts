@@ -2,13 +2,28 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptSensitive, encryptSensitive, lastFour, verifyPin } from "@/lib/auth/crypto";
 import type { TransferCreateInput } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
-import { notifyMember, notifyMemberAsync } from "@/lib/banking/member-notifications";
+import { notifyMember } from "@/lib/banking/member-notifications";
+import { sendTransferStatusEmail } from "@/lib/email/member-alerts";
 import {
   getActiveBillPayPayee,
   resolvePayeeAccountNumber,
 } from "@/lib/banking/bill-pay";
 import { buildTransferReference } from "@/lib/banking/transaction-reference";
 import { formatCurrency } from "@/lib/format/currency";
+import {
+  executeInternalTransferLegs,
+  formatTransferAccountLabel,
+  loadTransferAccount,
+} from "@/lib/banking/internal-transfer";
+import {
+  canTransferFromLoanTo,
+  isLoanAccountType,
+} from "@/lib/banking/loan-accounts";
+import { isValidWireCountry } from "@/lib/geo/wire-countries";
+import {
+  DEFAULT_TRANSFER_PAUSE_MESSAGE,
+  TransferPausedError,
+} from "@/lib/banking/transfer-pause";
 
 export type TransferResult = {
   transfer: {
@@ -31,7 +46,7 @@ export async function executeMemberTransfer(
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select(
-      "pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, bill_pay_enabled, first_name, last_name"
+      "pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, pause_transfers, transfer_pause_reason, bill_pay_enabled, first_name, last_name"
     )
     .eq("id", memberId)
     .single();
@@ -46,7 +61,7 @@ export async function executeMemberTransfer(
 
   const { data: source, error: sourceError } = await admin
     .from("accounts")
-    .select("id, member_id, available_balance, balance, status, account_number")
+    .select("id, member_id, available_balance, balance, status, account_number, type")
     .eq("id", input.sourceAccountId)
     .eq("member_id", memberId)
     .single();
@@ -62,6 +77,15 @@ export async function executeMemberTransfer(
   validateTransferInput(input, profile.bill_pay_enabled !== false);
 
   const resolvedInput = await resolveTransferPayeeDetails(admin, memberId, input);
+
+  if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
+    await validateInternalDestination(
+      admin,
+      memberId,
+      resolvedInput.destinationAccountId,
+      resolvedInput.sourceAccountId
+    );
+  }
 
   const transferRequiresCode =
     resolvedInput.type !== "direct_deposit" &&
@@ -102,9 +126,24 @@ export async function executeMemberTransfer(
     throw new Error("Insufficient available balance.");
   }
 
+  if (profile.pause_transfers === true) {
+    const pauseMessage =
+      profile.transfer_pause_reason?.trim() || DEFAULT_TRANSFER_PAUSE_MESSAGE;
+    throw new TransferPausedError(pauseMessage);
+  }
+
   const needsAdminApproval = profile.delay_transactions === true;
   const status = needsAdminApproval ? "pending_approval" : "completed";
-  const beneficiaryLabel = buildBeneficiaryLabel(resolvedInput);
+
+  let beneficiaryLabel = buildBeneficiaryLabel(resolvedInput);
+  if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
+    const destination = await loadTransferAccount(
+      admin,
+      resolvedInput.destinationAccountId,
+      memberId
+    );
+    beneficiaryLabel = formatTransferAccountLabel(destination);
+  }
 
   const { data: transfer, error: transferError } = await admin
     .from("transfers")
@@ -129,7 +168,7 @@ export async function executeMemberTransfer(
       wire_country: resolvedInput.wireCountry ?? null,
       pin_verified_at: new Date().toISOString(),
       member_message: needsAdminApproval
-        ? "Your transfer is pending administrator approval."
+        ? `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} is awaiting administrator review. No funds have been deducted from your account yet.`
         : "Transfer completed successfully.",
       completed_at: needsAdminApproval ? null : new Date().toISOString(),
     })
@@ -144,25 +183,26 @@ export async function executeMemberTransfer(
 
   if (!needsAdminApproval) {
     const description = buildTransactionDescription(resolvedInput, beneficiaryLabel);
+    const reference = buildTransferReference(transfer.id);
     try {
-      await postAccountTransaction(admin, {
-        accountId: source.id,
-        amount: input.amount,
-        direction: "debit",
-        type: "transfer",
-        description,
-        reference: buildTransferReference(transfer.id),
-        transferId: transfer.id,
-      });
-
       if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
-        await postAccountTransaction(admin, {
-          accountId: resolvedInput.destinationAccountId,
+        await executeInternalTransferLegs(admin, {
+          sourceAccountId: source.id,
+          destinationAccountId: resolvedInput.destinationAccountId,
           amount: input.amount,
-          direction: "credit",
+          debitDescription: description,
+          creditDescription: `Internal Transfer — from ••••${source.account_number.slice(-4)}`,
+          reference,
+          transferId: transfer.id,
+        });
+      } else {
+        await postAccountTransaction(admin, {
+          accountId: source.id,
+          amount: input.amount,
+          direction: "debit",
           type: "transfer",
-          description: `Internal Transfer — from ••••${source.account_number.slice(-4)}`,
-          reference: buildTransferReference(transfer.id),
+          description,
+          reference,
           transferId: transfer.id,
         });
       }
@@ -181,18 +221,34 @@ export async function executeMemberTransfer(
       throw debitError;
     }
 
-    notifyMemberAsync(admin, {
+    await notifyMember(admin, {
       userId: memberId,
       title: "Transfer completed",
       message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} was processed successfully.`,
       category: "transactional",
     });
+    await sendTransferStatusEmail(admin, {
+      memberId,
+      firstName: profile.first_name?.trim() || "Member",
+      status: "completed",
+      transferType: resolvedInput.type,
+      amount: resolvedInput.amount,
+      receiver: beneficiaryLabel,
+    });
   } else {
-    notifyMemberAsync(admin, {
+    await notifyMember(admin, {
       userId: memberId,
       title: "Transfer pending review",
-      message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} is awaiting administrator approval.`,
+      message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} is awaiting administrator review. No funds have been deducted yet.`,
       category: "transactional",
+    });
+    await sendTransferStatusEmail(admin, {
+      memberId,
+      firstName: profile.first_name?.trim() || "Member",
+      status: "pending",
+      transferType: resolvedInput.type,
+      amount: resolvedInput.amount,
+      receiver: beneficiaryLabel,
     });
   }
 
@@ -223,7 +279,7 @@ function validateTransferInput(input: TransferCreateInput, billPayEnabled: boole
     input.type !== "bill_pay";
 
   if (requiresExternal && !input.beneficiaryName) {
-    throw new Error("Beneficiary name is required.");
+    throw new Error("Receiver name is required.");
   }
 
   if (
@@ -235,6 +291,15 @@ function validateTransferInput(input: TransferCreateInput, billPayEnabled: boole
     throw new Error("Routing and account numbers are required.");
   }
 
+  if (
+    (input.type === "direct_deposit" ||
+      input.type === "local_wire" ||
+      input.type === "international_wire") &&
+    !input.beneficiaryBank?.trim()
+  ) {
+    throw new Error("Receiver bank name is required.");
+  }
+
   if (input.type === "zelle" && !input.zelleContact) {
     throw new Error("Zelle email or mobile number is required.");
   }
@@ -244,6 +309,61 @@ function validateTransferInput(input: TransferCreateInput, billPayEnabled: boole
     (!input.wireSwift || !input.wireIban || !input.wireCountry)
   ) {
     throw new Error("SWIFT, IBAN, and country are required for international wires.");
+  }
+
+  if (
+    input.type === "international_wire" &&
+    input.wireCountry &&
+    !isValidWireCountry(input.wireCountry)
+  ) {
+    throw new Error("Select a valid destination country.");
+  }
+}
+
+async function validateInternalDestination(
+  admin: SupabaseClient,
+  memberId: string,
+  destinationAccountId: string,
+  sourceAccountId: string
+) {
+  if (destinationAccountId === sourceAccountId) {
+    throw new Error("Cannot transfer to the same account.");
+  }
+
+  const { data: source, error: sourceError } = await admin
+    .from("accounts")
+    .select("id, member_id, status, type")
+    .eq("id", sourceAccountId)
+    .single();
+
+  if (sourceError || !source || source.member_id !== memberId) {
+    throw new Error("Source account not found.");
+  }
+
+  if (source.status !== "active") {
+    throw new Error("Source account is not active.");
+  }
+
+  const { data: destination, error } = await admin
+    .from("accounts")
+    .select("id, member_id, status, type")
+    .eq("id", destinationAccountId)
+    .single();
+
+  if (error || !destination || destination.member_id !== memberId) {
+    throw new Error("Destination account not found.");
+  }
+
+  if (destination.status !== "active") {
+    throw new Error("Destination account is not active.");
+  }
+
+  if (isLoanAccountType(destination.type)) {
+    throw new Error("Transfers cannot be sent to a loan account.");
+  }
+
+  if (isLoanAccountType(source.type) && !canTransferFromLoanTo(destination.type)) {
+    throw new Error("Loan funds can only be transferred to checking or savings.");
   }
 }
 
@@ -302,55 +422,113 @@ export async function completeTransferAsAdmin(
   decision: "approved" | "denied" | "delayed" | "pending",
   note?: string
 ) {
-  const { data: transfer, error } = await admin
-    .from("transfers")
-    .select("*")
-    .eq("id", transferId)
-    .single();
-
-  if (error || !transfer) {
-    throw new Error("Transfer not found.");
-  }
-
-  if (transfer.status === "completed" || transfer.status === "cancelled") {
-    throw new Error("Transfer is already finalized.");
-  }
+  const now = new Date().toISOString();
 
   if (decision === "approved") {
+    const { data: transfer, error: claimError } = await admin
+      .from("transfers")
+      .update({
+        status: "processing",
+        updated_at: now,
+      })
+      .eq("id", transferId)
+      .in("status", ["pending_approval", "pending"])
+      .select("*")
+      .maybeSingle();
+
+    if (claimError) {
+      throw new Error(claimError.message);
+    }
+
+    if (!transfer) {
+      const { data: existing } = await admin
+        .from("transfers")
+        .select("status")
+        .eq("id", transferId)
+        .maybeSingle();
+
+      if (!existing) {
+        throw new Error("Transfer not found.");
+      }
+      throw new Error("Transfer is already finalized.");
+    }
+
+    if (transfer.type === "internal" && transfer.destination_account_id) {
+      await validateInternalDestination(
+        admin,
+        transfer.member_id,
+        transfer.destination_account_id,
+        transfer.source_account_id
+      );
+    }
+
     const { data: source } = await admin
       .from("accounts")
       .select("id, available_balance, account_number")
       .eq("id", transfer.source_account_id)
       .single();
 
-    if (!source) throw new Error("Source account not found.");
+    if (!source) {
+      await admin
+        .from("transfers")
+        .update({
+          status: "pending_approval",
+          updated_at: now,
+        })
+        .eq("id", transferId);
+      throw new Error("Source account not found.");
+    }
+
     if (Number(source.available_balance) < Number(transfer.amount)) {
+      await admin
+        .from("transfers")
+        .update({
+          status: "pending_approval",
+          member_message:
+            "Insufficient balance to complete this transfer. Please add funds or contact your account officer.",
+          updated_at: now,
+        })
+        .eq("id", transferId);
       throw new Error("Insufficient balance to approve transfer.");
     }
 
     const beneficiary =
       transfer.beneficiary_name ?? transfer.zelle_contact ?? "Recipient";
+    const reference = buildTransferReference(transfer.id);
 
-    await postAccountTransaction(admin, {
-      accountId: transfer.source_account_id,
-      amount: Number(transfer.amount),
-      direction: "debit",
-      type: "transfer",
-      description: `${formatType(transfer.type)} — ${beneficiary}`,
-      reference: buildTransferReference(transfer.id),
-      transferId: transfer.id,
-    });
-
-    if (transfer.type === "internal" && transfer.destination_account_id) {
-      await postAccountTransaction(admin, {
-        accountId: transfer.destination_account_id,
-        amount: Number(transfer.amount),
-        direction: "credit",
-        type: "transfer",
-        description: `Internal Transfer — approved`,
-        reference: buildTransferReference(transfer.id),
-        transferId: transfer.id,
-      });
+    try {
+      if (transfer.type === "internal" && transfer.destination_account_id) {
+        await executeInternalTransferLegs(admin, {
+          sourceAccountId: transfer.source_account_id,
+          destinationAccountId: transfer.destination_account_id,
+          amount: Number(transfer.amount),
+          debitDescription: `${formatType(transfer.type)} — ${beneficiary}`,
+          creditDescription: `Internal Transfer — approved`,
+          reference,
+          transferId: transfer.id,
+        });
+      } else {
+        await postAccountTransaction(admin, {
+          accountId: transfer.source_account_id,
+          amount: Number(transfer.amount),
+          direction: "debit",
+          type: "transfer",
+          description: `${formatType(transfer.type)} — ${beneficiary}`,
+          reference,
+          transferId: transfer.id,
+        });
+      }
+    } catch (debitError) {
+      await admin
+        .from("transfers")
+        .update({
+          status: "pending_approval",
+          member_message:
+            "This transfer could not be completed. Please try again or contact your account officer.",
+          updated_at: now,
+        })
+        .eq("id", transferId);
+      throw debitError;
     }
 
     await admin
@@ -360,39 +538,107 @@ export async function completeTransferAsAdmin(
         approved_by: actorId,
         admin_decision: "approved",
         member_message: note ?? "Your transfer has been approved and processed.",
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        completed_at: now,
+        updated_at: now,
       })
       .eq("id", transferId);
 
+    const { data: memberProfile } = await admin
+      .from("profiles")
+      .select("first_name")
+      .eq("id", transfer.member_id)
+      .single();
+
+    const approvalNote = note ?? "Your transfer has been approved and processed.";
     await notifyMember(admin, {
       userId: transfer.member_id,
       title: "Transfer approved",
-      message: note ?? `Your transfer of ${formatCurrency(Number(transfer.amount))} has been approved.`,
+      message: approvalNote,
       category: "transactional",
+    });
+    await sendTransferStatusEmail(admin, {
+      memberId: transfer.member_id,
+      firstName: memberProfile?.first_name?.trim() || "Member",
+      status: "approved",
+      transferType: transfer.type,
+      amount: Number(transfer.amount),
+      receiver: beneficiary,
+      note: approvalNote,
     });
     return;
   }
 
   if (decision === "denied") {
-    await admin
+    const { data: transfer, error: denyError } = await admin
       .from("transfers")
       .update({
         status: "cancelled",
         approved_by: actorId,
         admin_decision: "denied",
         member_message: note ?? "Your transfer was declined by your account officer.",
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
-      .eq("id", transferId);
+      .eq("id", transferId)
+      .in("status", ["pending_approval", "pending", "processing"])
+      .select("member_id, amount, type")
+      .maybeSingle();
+
+    if (denyError) {
+      throw new Error(denyError.message);
+    }
+
+    if (!transfer) {
+      const { data: existing } = await admin
+        .from("transfers")
+        .select("status")
+        .eq("id", transferId)
+        .maybeSingle();
+
+      if (!existing) {
+        throw new Error("Transfer not found.");
+      }
+      throw new Error("Transfer is already finalized.");
+    }
+
+    const declineNote =
+      note ?? `Your transfer of ${formatCurrency(Number(transfer.amount))} was not approved.`;
 
     await notifyMember(admin, {
       userId: transfer.member_id,
       title: "Transfer declined",
-      message: note ?? `Your transfer of ${formatCurrency(Number(transfer.amount))} was not approved.`,
+      message: declineNote,
       category: "transactional",
     });
+
+    const { data: memberProfile } = await admin
+      .from("profiles")
+      .select("first_name")
+      .eq("id", transfer.member_id)
+      .single();
+
+    await sendTransferStatusEmail(admin, {
+      memberId: transfer.member_id,
+      firstName: memberProfile?.first_name?.trim() || "Member",
+      status: "declined",
+      transferType: transfer.type ?? "transfer",
+      amount: Number(transfer.amount),
+      note: declineNote,
+    });
     return;
+  }
+
+  const { data: transfer, error } = await admin
+    .from("transfers")
+    .select("member_id, amount, status, type")
+    .eq("id", transferId)
+    .single();
+
+  if (error || !transfer) {
+    throw new Error("Transfer not found.");
+  }
+
+  if (transfer.status === "completed" || transfer.status === "cancelled") {
+    throw new Error("Transfer is already finalized.");
   }
 
   const message =
@@ -407,14 +653,30 @@ export async function completeTransferAsAdmin(
       approved_by: actorId,
       admin_decision: decision,
       member_message: message,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
-    .eq("id", transferId);
+    .eq("id", transferId)
+    .in("status", ["pending_approval", "pending", "processing"]);
 
   await notifyMember(admin, {
     userId: transfer.member_id,
     title: decision === "delayed" ? "Transfer delayed" : "Transfer pending",
     message,
     category: "transactional",
+  });
+
+  const { data: memberProfile } = await admin
+    .from("profiles")
+    .select("first_name")
+    .eq("id", transfer.member_id)
+    .single();
+
+  await sendTransferStatusEmail(admin, {
+    memberId: transfer.member_id,
+    firstName: memberProfile?.first_name?.trim() || "Member",
+    status: decision === "delayed" ? "delayed" : "pending",
+    transferType: transfer.type ?? "transfer",
+    amount: Number(transfer.amount),
+    note: message,
   });
 }

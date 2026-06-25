@@ -242,7 +242,6 @@ export const transferCreateSchema = z.object({
 export const billPayPayeeSchema = z.object({
   nickname: z.string().trim().min(1).max(60),
   payeeName: z.string().trim().min(1).max(120),
-  routingNumber: routingNumberSchema,
   accountNumber: z
     .string()
     .trim()

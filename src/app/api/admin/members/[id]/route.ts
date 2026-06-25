@@ -20,6 +20,8 @@ const updateMemberSchema = z.object({
   imfRequired: z.boolean().optional(),
   delayTransactions: z.boolean().optional(),
   billPayEnabled: z.boolean().optional(),
+  pauseTransfers: z.boolean().optional(),
+  transferPauseReason: z.string().max(500).optional(),
 });
 
 export async function GET(
@@ -113,6 +115,13 @@ export async function PATCH(
     if (input.billPayEnabled !== undefined) {
       updates.bill_pay_enabled = input.billPayEnabled;
     }
+    if (input.pauseTransfers !== undefined) {
+      updates.pause_transfers = input.pauseTransfers;
+    }
+    if (input.transferPauseReason !== undefined) {
+      const trimmed = input.transferPauseReason.trim();
+      updates.transfer_pause_reason = trimmed || null;
+    }
     if (input.cotCode !== undefined) {
       const trimmed = input.cotCode.trim();
       updates.cot_code_encrypted = trimmed ? encryptSensitive(trimmed) : null;
@@ -128,7 +137,7 @@ export async function PATCH(
       .eq("id", id)
       .eq("staff_role", "member")
       .select(
-        "id, employer_company_name, address_state, cot_required, imf_required, delay_transactions, bill_pay_enabled"
+        "id, employer_company_name, address_state, cot_required, imf_required, delay_transactions, bill_pay_enabled, pause_transfers, transfer_pause_reason"
       )
       .single();
 

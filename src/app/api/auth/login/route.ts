@@ -8,9 +8,13 @@ import { generateOtpCode, hashOtp, verifyPin } from "@/lib/auth/crypto";
 import { loginSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
 import { EmailDeliveryError } from "@/lib/email/config";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export async function POST(request: Request) {
   try {
+    const limited = enforceRateLimit(request, "auth:login", 12, 60_000);
+    if (limited) return limited;
+
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
