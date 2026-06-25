@@ -32,13 +32,17 @@ export function getResendFromAddress(fromEmail?: string): string {
   return fromAddress(fromEmail ?? getDefaultResendFromEmail());
 }
 
+function sanitizeApiKey(value: string): string {
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
 function readEnvApiKey(): string | undefined {
-  return (
-    process.env.RESEND_API_KEY?.trim() ||
-    process.env.RESEND_KEY?.trim() ||
-    process.env.RESEND_SECRET?.trim() ||
-    undefined
-  );
+  const raw =
+    process.env.RESEND_API_KEY ||
+    process.env.RESEND_KEY ||
+    process.env.RESEND_SECRET;
+  if (!raw?.trim()) return undefined;
+  return sanitizeApiKey(raw);
 }
 
 export async function resolveResendCredentials(): Promise<ResendCredentials | null> {

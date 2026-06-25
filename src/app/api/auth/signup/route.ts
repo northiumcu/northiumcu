@@ -98,11 +98,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: otpError?.message }, { status: 500 });
     }
 
-    await sendOtpEmail({
-      to: normalizedEmail,
-      code: otp,
-      purpose: "signup",
-    });
+    try {
+      await sendOtpEmail({
+        to: normalizedEmail,
+        code: otp,
+        purpose: "signup",
+      });
+    } catch (emailError) {
+      await admin.from("auth_otp_challenges").delete().eq("id", challenge.id);
+      throw emailError;
+    }
 
     return NextResponse.json({
       challengeId: challenge.id,

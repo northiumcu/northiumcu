@@ -177,6 +177,7 @@ export function ApplyForm() {
                       label="Create Account PIN"
                       value={form.pin}
                       onChange={(value) => updateField("pin", value)}
+                      variant="compact"
                       required
                     />
                     <PinInput
@@ -184,6 +185,7 @@ export function ApplyForm() {
                       label="Confirm Account PIN"
                       value={form.confirmPin}
                       onChange={(value) => updateField("confirmPin", value)}
+                      variant="compact"
                       required
                     />
                   </div>
