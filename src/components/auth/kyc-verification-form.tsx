@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ID_DOCUMENT_OPTIONS } from "@/lib/auth/membership-options";
+import { formatSSNInput } from "@/lib/format/ssn";
 import { cn } from "@/lib/utils";
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -114,24 +115,20 @@ export function KycVerificationForm({ onSubmitted }: KycVerificationFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="rounded-xl border border-northium-border bg-northium-surface p-4">
-        <h3 className="font-heading text-sm font-semibold text-northium-primary">
-          Identity Verification (KYC)
-        </h3>
-        <p className="mt-1 text-xs text-northium-muted">
-          Required for membership approval. An administrator will review before
-          your 12-digit account number is issued.
-        </p>
-      </div>
+      <h3 className="font-heading text-sm font-semibold text-northium-primary">
+        Identity Verification (KYC)
+      </h3>
 
       <div className="space-y-2">
         <Label htmlFor="kyc-ssn">Social Security Number</Label>
         <Input
           id="kyc-ssn"
           value={ssn}
-          onChange={(e) => setSsn(e.target.value)}
+          onChange={(e) => setSsn(formatSSNInput(e.target.value))}
           className="rounded-xl"
           placeholder="XXX-XX-XXXX"
+          inputMode="numeric"
+          maxLength={11}
           autoComplete="off"
           required
         />

@@ -57,14 +57,9 @@ export function MemberKycPanel() {
   return (
     <Card className="rounded-2xl border-northium-border shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-4">
-        <div>
-          <CardTitle className="font-heading text-lg text-northium-primary">
-            Complete Your Membership
-          </CardTitle>
-          <p className="mt-1 text-sm text-northium-muted">
-            Submit identity verification to finish opening your account.
-          </p>
-        </div>
+        <CardTitle className="font-heading text-lg text-northium-primary">
+          Complete Your Membership
+        </CardTitle>
         <Badge variant="outline">Action Required</Badge>
       </CardHeader>
       <CardContent>

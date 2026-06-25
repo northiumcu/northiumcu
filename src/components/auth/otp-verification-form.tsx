@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+type OtpResendMode = "signup" | "login";
+
 interface OtpVerificationFormProps {
   challengeId: string;
   emailLabel: string;
   resendEmail?: string;
+  resendMode?: OtpResendMode;
   onChallengeIdChange?: (challengeId: string) => void;
   onSuccess: (redirectTo: string) => void;
 }
@@ -17,6 +20,7 @@ export function OtpVerificationForm({
   challengeId,
   emailLabel,
   resendEmail,
+  resendMode = "signup",
   onChallengeIdChange,
   onSuccess,
 }: OtpVerificationFormProps) {
@@ -32,17 +36,27 @@ export function OtpVerificationForm({
   }, [challengeId]);
 
   async function handleResend() {
-    if (!resendEmail) return;
+    if (resendMode === "signup" && !resendEmail) return;
+    if (resendMode === "login" && !activeChallengeId) return;
 
     setResending(true);
     setError(null);
     setInfo(null);
 
-    const response = await fetch("/api/auth/signup/resend-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: resendEmail }),
-    });
+    const response = await fetch(
+      resendMode === "login"
+        ? "/api/auth/login/resend-otp"
+        : "/api/auth/signup/resend-otp",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          resendMode === "login"
+            ? { challengeId: activeChallengeId }
+            : { email: resendEmail }
+        ),
+      }
+    );
     const data = await response.json();
     setResending(false);
 
@@ -125,20 +139,20 @@ export function OtpVerificationForm({
       >
         {loading ? "Verifying..." : "Verify & Continue"}
       </Button>
-      {!activeChallengeId && resendEmail && (
+      {!activeChallengeId && resendMode === "signup" && resendEmail && (
         <p className="text-sm text-northium-muted">
-          Request a verification code below to continue your application.
+          Tap resend email below to get a verification code.
         </p>
       )}
-      {resendEmail && (
+      {(resendEmail || resendMode === "login") && (
         <Button
           type="button"
           variant="outline"
-          disabled={resending}
+          disabled={resending || (resendMode === "login" && !activeChallengeId)}
           onClick={() => void handleResend()}
           className="w-full rounded-xl"
         >
-          {resending ? "Sending new code..." : "Resend verification code"}
+          {resending ? "Sending..." : "Resend email"}
         </Button>
       )}
     </form>

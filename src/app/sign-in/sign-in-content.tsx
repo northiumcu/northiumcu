@@ -186,6 +186,8 @@ export default function SignInContent() {
                   <OtpVerificationForm
                     challengeId={challengeId}
                     emailLabel={emailLabel}
+                    resendMode="login"
+                    onChallengeIdChange={setChallengeId}
                     onSuccess={(redirectTo) => router.push(redirectTo)}
                   />
                 ) : view === "forgot-request" ? (
