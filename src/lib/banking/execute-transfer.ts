@@ -8,6 +8,7 @@ import {
   resolvePayeeAccountNumber,
 } from "@/lib/banking/bill-pay";
 import { buildTransferReference } from "@/lib/banking/transaction-reference";
+import { formatCurrency } from "@/lib/format/currency";
 
 export type TransferResult = {
   transfer: {
@@ -101,7 +102,7 @@ export async function executeMemberTransfer(
     throw new Error("Insufficient available balance.");
   }
 
-  const needsAdminApproval = Boolean(profile.delay_transactions);
+  const needsAdminApproval = profile.delay_transactions === true;
   const status = needsAdminApproval ? "pending_approval" : "completed";
   const beneficiaryLabel = buildBeneficiaryLabel(resolvedInput);
 
@@ -143,41 +144,54 @@ export async function executeMemberTransfer(
 
   if (!needsAdminApproval) {
     const description = buildTransactionDescription(resolvedInput, beneficiaryLabel);
-    await postAccountTransaction(admin, {
-      accountId: source.id,
-      amount: input.amount,
-      direction: "debit",
-      type: "transfer",
-      description,
-      reference: buildTransferReference(transfer.id),
-      transferId: transfer.id,
-    });
-
-    if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
+    try {
       await postAccountTransaction(admin, {
-        accountId: resolvedInput.destinationAccountId,
+        accountId: source.id,
         amount: input.amount,
-        direction: "credit",
+        direction: "debit",
         type: "transfer",
-        description: `Internal Transfer — from ••••${source.account_number.slice(-4)}`,
+        description,
         reference: buildTransferReference(transfer.id),
         transferId: transfer.id,
       });
-    }
 
-    debited = true;
+      if (resolvedInput.type === "internal" && resolvedInput.destinationAccountId) {
+        await postAccountTransaction(admin, {
+          accountId: resolvedInput.destinationAccountId,
+          amount: input.amount,
+          direction: "credit",
+          type: "transfer",
+          description: `Internal Transfer — from ••••${source.account_number.slice(-4)}`,
+          reference: buildTransferReference(transfer.id),
+          transferId: transfer.id,
+        });
+      }
+
+      debited = true;
+    } catch (debitError) {
+      await admin
+        .from("transfers")
+        .update({
+          status: "failed",
+          member_message:
+            "This transfer could not be completed. Please try again or contact your Northium account officer.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", transfer.id);
+      throw debitError;
+    }
 
     await notifyMember(admin, {
       userId: memberId,
       title: "Transfer completed",
-      message: `Your ${formatType(resolvedInput.type)} of $${resolvedInput.amount.toFixed(2)} was processed successfully.`,
+      message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} was processed successfully.`,
       category: "transactional",
     });
   } else {
     await notifyMember(admin, {
       userId: memberId,
       title: "Transfer pending review",
-      message: `Your ${formatType(resolvedInput.type)} of $${resolvedInput.amount.toFixed(2)} is awaiting administrator approval.`,
+      message: `Your ${formatType(resolvedInput.type)} of ${formatCurrency(resolvedInput.amount)} is awaiting administrator approval.`,
       category: "transactional",
     });
   }
@@ -354,7 +368,7 @@ export async function completeTransferAsAdmin(
     await notifyMember(admin, {
       userId: transfer.member_id,
       title: "Transfer approved",
-      message: note ?? `Your transfer of $${Number(transfer.amount).toFixed(2)} has been approved.`,
+      message: note ?? `Your transfer of ${formatCurrency(Number(transfer.amount))} has been approved.`,
       category: "transactional",
     });
     return;
@@ -375,7 +389,7 @@ export async function completeTransferAsAdmin(
     await notifyMember(admin, {
       userId: transfer.member_id,
       title: "Transfer declined",
-      message: note ?? `Your transfer of $${Number(transfer.amount).toFixed(2)} was not approved.`,
+      message: note ?? `Your transfer of ${formatCurrency(Number(transfer.amount))} was not approved.`,
       category: "transactional",
     });
     return;

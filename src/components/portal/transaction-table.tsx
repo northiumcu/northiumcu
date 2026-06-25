@@ -7,6 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Transaction } from "@/types/database";
+import { formatCurrency } from "@/lib/format/currency";
 import { cn } from "@/lib/utils";
 
 const CREDIT_TYPES: Transaction["type"][] = [
@@ -21,11 +22,6 @@ interface TransactionTableProps {
 }
 
 export function TransactionTable({ transactions }: TransactionTableProps) {
-  const formatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-
   const dateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -77,7 +73,7 @@ export function TransactionTable({ transactions }: TransactionTableProps) {
                   )}
                 >
                   {isCredit ? "+" : "-"}
-                  {formatter.format(Math.abs(tx.amount))}
+                  {formatCurrency(Math.abs(tx.amount))}
                 </TableCell>
               </TableRow>
             );

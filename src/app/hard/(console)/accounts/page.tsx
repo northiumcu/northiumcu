@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface AccountRow {
   id: string;
@@ -110,7 +111,7 @@ export default function AdminAccountsPage() {
                     {account.account_number}
                   </TableCell>
                   <TableCell className="capitalize">{account.type}</TableCell>
-                  <TableCell>${Number(account.balance).toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrency(account.balance)}</TableCell>
                   <TableCell className="capitalize">{account.status}</TableCell>
                 </TableRow>
               ))

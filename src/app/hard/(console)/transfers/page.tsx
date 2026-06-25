@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface TransferRow {
   id: string;
@@ -109,7 +110,7 @@ export default function AdminTransfersPage() {
                       : "—"}
                   </TableCell>
                   <TableCell className="capitalize">{t.type.replace(/_/g, " ")}</TableCell>
-                  <TableCell>${Number(t.amount).toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrency(t.amount)}</TableCell>
                   <TableCell>
                     {t.beneficiary_name ?? t.zelle_contact ?? "—"}
                   </TableCell>

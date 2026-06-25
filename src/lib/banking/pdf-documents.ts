@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { formatCurrency } from "@/lib/format/currency";
 import { formatHeadquartersAddress, institution } from "@/lib/institution";
 
 const navy = rgb(0.031, 0.094, 0.153);
@@ -118,7 +119,7 @@ export async function buildTransferReceiptPdf(data: {
     ["From Account", data.accountMask],
     ["Transfer Type", data.type.replace(/_/g, " ").toUpperCase()],
     ["Beneficiary", data.beneficiary],
-    ["Amount", `$${data.amount.toFixed(2)}`],
+    ["Amount", formatCurrency(data.amount)],
     ["Status", data.status.toUpperCase()],
     ["Date", new Date(data.completedAt).toLocaleString()],
   ];
@@ -184,14 +185,14 @@ export async function buildStatementPdf(data: {
   y -= 16;
   page.drawText(`Account: ${data.accountMask}`, { x: 48, y, size: 10, font: regular, color: text });
   y -= 24;
-  page.drawText(`Opening Balance: $${data.openingBalance.toFixed(2)}`, {
+  page.drawText(`Opening Balance: ${formatCurrency(data.openingBalance)}`, {
     x: 48,
     y,
     size: 10,
     font: bold,
     color: text,
   });
-  page.drawText(`Closing Balance: $${data.closingBalance.toFixed(2)}`, {
+  page.drawText(`Closing Balance: ${formatCurrency(data.closingBalance)}`, {
     x: 300,
     y,
     size: 10,
@@ -217,7 +218,7 @@ export async function buildStatementPdf(data: {
       font: regular,
       color: text,
     });
-    page.drawText(`${sign}$${row.amount.toFixed(2)}`, {
+    page.drawText(`${sign}${formatCurrency(row.amount)}`, {
       x: 470,
       y,
       size: 8,

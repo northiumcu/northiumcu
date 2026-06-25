@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notifyMember } from "@/lib/banking/member-notifications";
+import { formatCurrency } from "@/lib/format/currency";
 
 const decisionSchema = z.object({
   decision: z.enum(["approved", "denied", "delayed"]),
@@ -55,7 +56,7 @@ export async function POST(
       await notifyMember(admin, {
         userId: loan.member_id,
         title: "Loan approved",
-        message: note ?? `Your loan application for $${principal.toFixed(2)} has been approved.`,
+        message: note ?? `Your loan application for ${formatCurrency(principal)} has been approved.`,
         category: "transactional",
       });
     } else if (parsed.data.decision === "denied") {

@@ -16,6 +16,7 @@ import {
   PAYROLL_FREQUENCY_OPTIONS,
   payrollFrequencyLabel,
 } from "@/lib/banking/generate-member-transactions";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface MemberAccount {
   id: string;
@@ -181,7 +182,7 @@ export function MemberControlsPanel({
     showFeedback(
       "fund",
       "success",
-      `${direction === "credit" ? "Funded" : "Debited"} $${Number(adjustAmount).toFixed(2)}. New balance: $${Number(data.balance).toFixed(2)}.`
+      `${direction === "credit" ? "Funded" : "Debited"} ${formatCurrency(adjustAmount)}. New balance: ${formatCurrency(data.balance)}.`
     );
     setAdjustAmount("");
     void load();
@@ -228,7 +229,7 @@ export function MemberControlsPanel({
     showFeedback(
       "generate",
       "success",
-      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}) from ${rangeLabel}. Payroll from ${company} runs ${payrollLabel.toLowerCase()} at $${payrollMin.toFixed(2)}–$${payrollMax.toFixed(2)} per deposit. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
+      `Generated ${data.summary.credits} credits (${formatCurrency(data.summary.totalCreditAmount)}) and ${data.summary.debits} debits (${formatCurrency(data.summary.totalDebitAmount)}) from ${rangeLabel}. Payroll from ${company} runs ${payrollLabel.toLowerCase()} at ${formatCurrency(payrollMin)}–${formatCurrency(payrollMax)} per deposit. Ending balance: ${formatCurrency(data.summary.endingBalance ?? data.account?.available_balance ?? 0)}.`
     );
     void load();
   }
@@ -439,8 +440,8 @@ export function MemberControlsPanel({
                   >
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.type} ••••{account.account_number.slice(-4)} — $
-                        {Number(account.available_balance).toFixed(2)}
+                        {account.type} ••••{account.account_number.slice(-4)} —{" "}
+                        {formatCurrency(account.available_balance)}
                       </option>
                     ))}
                   </select>

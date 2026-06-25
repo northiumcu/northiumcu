@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { Loan } from "@/types/database";
+import { formatCurrency } from "@/lib/format/currency";
 import { cn } from "@/lib/utils";
 
 const loanLabels: Record<Loan["loan_type"], string> = {
@@ -23,10 +24,7 @@ interface LoanCardProps {
 }
 
 export function LoanCard({ loan }: LoanCardProps) {
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(loan.outstanding_balance);
+  const formatted = formatCurrency(loan.outstanding_balance);
 
   const isPending = ["application", "underwriting", "approved"].includes(loan.status);
 

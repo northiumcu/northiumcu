@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
 import { NorthiumMastercard } from "@/components/portal/northium-mastercard";
 import { MASTERCARD_FEE } from "@/lib/banking/member-products";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface CardRecord {
   id: string;
@@ -91,7 +92,7 @@ export function MemberCardsClient() {
       return;
     }
     setMessage(
-      `Application submitted. $${MASTERCARD_FEE} processing fee charged. Your card is pending Northium review.`
+      `Application submitted. ${formatCurrency(MASTERCARD_FEE)} processing fee charged. Your card is pending Northium review.`
     );
     setPin("");
     load();
@@ -250,9 +251,9 @@ export function MemberCardsClient() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-northium-muted">
-              Premium Mastercard with Northium rewards. A one-time ${MASTERCARD_FEE}{" "}
-              application fee applies. After review, your digital card credentials
-              will appear here.
+              Premium Mastercard with Northium rewards. A one-time{" "}
+              {formatCurrency(MASTERCARD_FEE)} application fee applies. After review, your
+              digital card credentials will appear here.
             </p>
             <div className="space-y-2">
               <Label>Pay fee from account</Label>
@@ -263,8 +264,8 @@ export function MemberCardsClient() {
               >
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.type} ••••{a.account_number.slice(-4)} — $
-                    {Number(a.available_balance).toFixed(2)}
+                    {a.type} ••••{a.account_number.slice(-4)} —{" "}
+                    {formatCurrency(a.available_balance)}
                   </option>
                 ))}
               </select>
@@ -284,7 +285,7 @@ export function MemberCardsClient() {
               onClick={() => void apply()}
               className="bg-northium-primary hover:bg-northium-secondary"
             >
-              Apply — ${MASTERCARD_FEE}
+              Apply — {formatCurrency(MASTERCARD_FEE)}
             </Button>
           </CardContent>
         </Card>

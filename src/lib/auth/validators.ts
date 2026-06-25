@@ -25,6 +25,16 @@ export function sanitizeRoutingNumberInput(value: string): string {
   return value.replace(/\D/g, "").slice(0, ROUTING_NUMBER_LENGTH);
 }
 
+/** Treat blank optional request fields as undefined so Zod optional() works. */
+export function optionalEmpty<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    schema
+  );
+}
+
+export const optionalRoutingNumberSchema = optionalEmpty(routingNumberSchema.optional());
+
 export const ssnSchema = z
   .string()
   .regex(/^\d{3}-?\d{2}-?\d{4}$/, "Enter a valid 9-digit SSN.");
@@ -213,19 +223,19 @@ export const transferCreateSchema = z.object({
     "bill_pay",
   ]),
   amount: z.number().positive().max(1_000_000),
-  memo: z.string().max(200).optional(),
-  destinationAccountId: z.string().uuid().optional(),
-  payeeId: z.string().uuid().optional(),
-  beneficiaryName: z.string().max(120).optional(),
-  beneficiaryBank: z.string().max(120).optional(),
-  destinationRoutingNumber: routingNumberSchema.optional(),
-  destinationAccountNumber: z.string().max(34).optional(),
-  zelleContact: z.string().max(120).optional(),
-  wireSwift: z.string().max(20).optional(),
-  wireIban: z.string().max(40).optional(),
-  wireCountry: z.string().max(80).optional(),
-  cotCode: z.string().max(32).optional(),
-  imfCode: z.string().max(32).optional(),
+  memo: optionalEmpty(z.string().max(200).optional()),
+  destinationAccountId: optionalEmpty(z.string().uuid().optional()),
+  payeeId: optionalEmpty(z.string().uuid().optional()),
+  beneficiaryName: optionalEmpty(z.string().max(120).optional()),
+  beneficiaryBank: optionalEmpty(z.string().max(120).optional()),
+  destinationRoutingNumber: optionalRoutingNumberSchema,
+  destinationAccountNumber: optionalEmpty(z.string().max(34).optional()),
+  zelleContact: optionalEmpty(z.string().max(120).optional()),
+  wireSwift: optionalEmpty(z.string().max(20).optional()),
+  wireIban: optionalEmpty(z.string().max(40).optional()),
+  wireCountry: optionalEmpty(z.string().max(80).optional()),
+  cotCode: optionalEmpty(z.string().max(32).optional()),
+  imfCode: optionalEmpty(z.string().max(32).optional()),
   pin: pinSchema,
 });
 

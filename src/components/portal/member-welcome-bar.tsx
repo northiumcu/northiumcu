@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { Sparkles } from "lucide-react";
+import { formatCurrency } from "@/lib/format/currency";
 
 export function MemberWelcomeBar() {
   const [firstName, setFirstName] = useState("");
@@ -42,12 +43,7 @@ export function MemberWelcomeBar() {
 
   const initials = `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
   const balanceLabel =
-    totalBalance === null
-      ? null
-      : new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(totalBalance);
+    totalBalance === null ? null : formatCurrency(totalBalance);
 
   return (
     <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-northium-primary via-[#0f3454] to-[#0f766e] p-5 shadow-xl shadow-northium-primary/20 sm:p-6">

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format/currency";
 import {
   Table,
   TableBody,
@@ -159,7 +160,8 @@ export function StatementsClient() {
                     <TableCell
                       className={`text-right font-medium ${isCredit ? "text-northium-success" : "text-northium-primary"}`}
                     >
-                      {isCredit ? "+" : "-"}${Number(tx.amount).toFixed(2)}
+                      {isCredit ? "+" : "-"}
+                      {formatCurrency(tx.amount)}
                     </TableCell>
                   </TableRow>
                 );

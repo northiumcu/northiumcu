@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { Account } from "@/types/database";
 import { accountTypeTheme } from "@/lib/portal/theme";
+import { formatCurrency } from "@/lib/format/currency";
 import { cn } from "@/lib/utils";
 
 interface AccountCardProps {
@@ -10,10 +11,7 @@ interface AccountCardProps {
 export function AccountCard({ account }: AccountCardProps) {
   const theme = accountTypeTheme[account.type];
   const Icon = theme.icon;
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(account.balance);
+  const formatted = formatCurrency(account.balance);
 
   return (
     <article

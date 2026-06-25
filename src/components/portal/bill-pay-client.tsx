@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
 import type { BillPayPayeeView } from "@/lib/banking/bill-pay";
 import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface Account {
   id: string;
@@ -304,8 +305,8 @@ export function BillPayClient() {
                   >
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.type} ••••{account.account_number.slice(-4)} — $
-                        {Number(account.available_balance).toFixed(2)}
+                        {account.type} ••••{account.account_number.slice(-4)} —{" "}
+                        {formatCurrency(account.available_balance)}
                       </option>
                     ))}
                   </select>

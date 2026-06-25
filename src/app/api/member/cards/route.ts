@@ -8,6 +8,7 @@ import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { MASTERCARD_FEE } from "@/lib/banking/member-products";
 import { notifyMember } from "@/lib/banking/member-notifications";
 import { maskedPanFromLastFour } from "@/lib/banking/card-issuance";
+import { formatCurrency } from "@/lib/format/currency";
 
 const applySchema = z.object({
   sourceAccountId: z.string().uuid(),
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
 
     if (Number(account.available_balance) < MASTERCARD_FEE) {
       return NextResponse.json(
-        { error: `Insufficient balance. $${MASTERCARD_FEE} required for card processing.` },
+        { error: `Insufficient balance. ${formatCurrency(MASTERCARD_FEE)} required for card processing.` },
         { status: 400 }
       );
     }

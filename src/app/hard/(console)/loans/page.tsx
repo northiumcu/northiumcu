@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface LoanApp {
   id: string;
@@ -109,7 +110,7 @@ export default function AdminLoansPage() {
                     {app.purpose ?? "—"}
                   </TableCell>
                   <TableCell>
-                    ${Number(app.requested_amount ?? 0).toLocaleString()}
+                    {formatCurrency(app.requested_amount ?? 0)}
                   </TableCell>
                   <TableCell>{app.term_months} mo</TableCell>
                   <TableCell className="text-right">

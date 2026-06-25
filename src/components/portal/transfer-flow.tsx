@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PinInput } from "@/components/forms/pin-input";
 import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
+import { formatCurrency } from "@/lib/format/currency";
 
 interface Account {
   id: string;
@@ -37,6 +39,73 @@ function transferRequiresSecurityCodes(transferType: string) {
     transferType !== "internal" &&
     transferType !== "zelle"
   );
+}
+
+function buildTransferRequestBody(input: {
+  type: string;
+  sourceAccountId: string;
+  destinationAccountId: string;
+  amount: string;
+  memo: string;
+  beneficiaryName: string;
+  beneficiaryBank: string;
+  routingNumber: string;
+  accountNumber: string;
+  zelleContact: string;
+  wireSwift: string;
+  wireIban: string;
+  wireCountry: string;
+  cotCode: string;
+  imfCode: string;
+  pin: string;
+  showSecurityCodes: boolean;
+  cotRequired: boolean;
+  imfRequired: boolean;
+  isZelle: boolean;
+}) {
+  const body: Record<string, unknown> = {
+    sourceAccountId: input.sourceAccountId,
+    type: input.type,
+    amount: Number(input.amount),
+    pin: input.pin,
+  };
+
+  const memo = input.memo.trim();
+  if (memo) body.memo = memo;
+
+  if (input.type === "internal") {
+    body.destinationAccountId = input.destinationAccountId;
+    return body;
+  }
+
+  if (input.type === "zelle") {
+    body.zelleContact = input.zelleContact.trim();
+    return body;
+  }
+
+  if (input.type === "direct_deposit" || input.type === "local_wire") {
+    body.beneficiaryName = input.beneficiaryName.trim();
+    body.destinationRoutingNumber = input.routingNumber.trim();
+    body.destinationAccountNumber = input.accountNumber.trim();
+    if (input.type === "local_wire" && input.beneficiaryBank.trim()) {
+      body.beneficiaryBank = input.beneficiaryBank.trim();
+    }
+  } else if (input.type === "international_wire") {
+    body.beneficiaryName = input.beneficiaryName.trim();
+    if (input.beneficiaryBank.trim()) body.beneficiaryBank = input.beneficiaryBank.trim();
+    body.wireSwift = input.wireSwift.trim();
+    body.wireIban = input.wireIban.trim();
+    body.wireCountry = input.wireCountry.trim();
+  }
+
+  if (input.showSecurityCodes && input.cotRequired && input.cotCode.trim()) {
+    body.cotCode = input.cotCode.trim();
+  }
+  if (input.showSecurityCodes && input.imfRequired && input.imfCode.trim()) {
+    body.imfCode = input.imfCode.trim();
+  }
+
+  return body;
 }
 
 export function TransferFlow() {
@@ -95,6 +164,20 @@ export function TransferFlow() {
       });
   }, []);
 
+  useEffect(() => {
+    setBeneficiaryName("");
+    setBeneficiaryBank("");
+    setRoutingNumber("");
+    setAccountNumber("");
+    setZelleContact("");
+    setWireSwift("");
+    setWireIban("");
+    setWireCountry("");
+    setCotCode("");
+    setImfCode("");
+    setError(null);
+  }, [type]);
+
   const summary = useMemo(() => {
     const source = accounts.find((a) => a.id === sourceAccountId);
     return {
@@ -151,24 +234,30 @@ export function TransferFlow() {
     const response = await fetch("/api/member/transfers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sourceAccountId,
-        destinationAccountId: type === "internal" ? destinationAccountId : undefined,
-        type,
-        amount: Number(amount),
-        memo,
-        beneficiaryName: isZelle ? zelleContact : beneficiaryName,
-        beneficiaryBank,
-        destinationRoutingNumber: routingNumber,
-        destinationAccountNumber: accountNumber,
-        zelleContact,
-        wireSwift,
-        wireIban,
-        wireCountry,
-        cotCode: showSecurityCodes && cotRequired ? cotCode : undefined,
-        imfCode: showSecurityCodes && imfRequired ? imfCode : undefined,
-        pin,
-      }),
+      body: JSON.stringify(
+        buildTransferRequestBody({
+          type,
+          sourceAccountId,
+          destinationAccountId,
+          amount,
+          memo,
+          beneficiaryName,
+          beneficiaryBank,
+          routingNumber,
+          accountNumber,
+          zelleContact,
+          wireSwift,
+          wireIban,
+          wireCountry,
+          cotCode,
+          imfCode,
+          pin,
+          showSecurityCodes,
+          cotRequired,
+          imfRequired,
+          isZelle,
+        })
+      ),
     });
 
     clearInterval(tick);
@@ -178,7 +267,11 @@ export function TransferFlow() {
     if (!response.ok) {
       setProgress(60);
       await new Promise((r) => setTimeout(r, 900));
-      setStatusMessage(TRANSFER_FAILURE_MESSAGE);
+      setStatusMessage(
+        typeof data.error === "string" && data.error.trim()
+          ? data.error
+          : TRANSFER_FAILURE_MESSAGE
+      );
       setStep("failed");
       setPin("");
       return;
@@ -257,8 +350,8 @@ export function TransferFlow() {
               >
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.type} ••••{account.account_number.slice(-4)} — $
-                    {Number(account.available_balance).toFixed(2)}
+                    {account.type} ••••{account.account_number.slice(-4)} —{" "}
+                    {formatCurrency(account.available_balance)}
                   </option>
                 ))}
               </select>
@@ -426,7 +519,7 @@ export function TransferFlow() {
               ["Type", summary.typeLabel],
               ["From", summary.from],
               ["Receiver", summary.beneficiary],
-              ["Amount", `$${summary.amount.toFixed(2)}`],
+              ["Amount", formatCurrency(summary.amount)],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -510,17 +603,13 @@ export function TransferFlow() {
                   Step 2 — Account PIN
                 </p>
               )}
-              <Label htmlFor="transfer-pin">6-Digit Account PIN</Label>
-              <Input
+              <PinInput
                 id="transfer-pin"
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
+                label="6-Digit Account PIN"
                 value={pin}
-                onChange={(e) =>
-                  setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                className="rounded-xl tracking-[0.3em]"
+                onChange={setPin}
+                variant="compact"
+                required
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -605,7 +694,7 @@ export function TransferFlow() {
                 />
               </svg>
               <span className="absolute inset-0 flex items-center justify-center font-heading text-2xl font-bold text-red-600">
-                60%
+                !
               </span>
             </div>
             <XCircle className="mx-auto size-12 text-red-600" />

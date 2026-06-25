@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format/currency";
 
 const loanTypes = [
   {
@@ -47,10 +48,7 @@ export default function LoansPage() {
         (Math.pow(1 + monthlyRate, term) - 1)
       : amount / term;
 
-  const formatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
+  const formattedPayment = formatCurrency(payment);
 
   return (
     <PublicLayout>
@@ -110,7 +108,7 @@ export default function LoansPage() {
                   Estimated Monthly Payment
                 </p>
                 <p className="mt-1 font-heading text-3xl font-bold text-white">
-                  {formatter.format(payment)}
+                  {formattedPayment}
                 </p>
               </div>
               <p className="text-xs text-northium-muted">

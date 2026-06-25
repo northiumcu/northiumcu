@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoanCard } from "@/components/portal/loan-card";
 import { LOAN_PURPOSES, MORTGAGE_PURPOSES } from "@/lib/banking/member-products";
 import type { Loan } from "@/types/database";
+import { formatCurrency } from "@/lib/format/currency";
 
 type LoanRow = Loan & {
   purpose?: string | null;
@@ -87,7 +88,7 @@ export function MemberLoansClient() {
           <CardContent className="space-y-2 text-sm text-northium-muted">
             {applications.map((app) => (
               <p key={app.id}>
-                {app.loan_type} — ${Number(app.requested_amount ?? app.principal_amount).toLocaleString()} —{" "}
+                {app.loan_type} — {formatCurrency(app.requested_amount ?? app.principal_amount)} —{" "}
                 <span className="capitalize">{app.status}</span>
               </p>
             ))}
