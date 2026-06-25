@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AccountCard } from "@/components/portal/account-card";
-import { AlertsPanel } from "@/components/portal/alerts-panel";
 import { LoanCard } from "@/components/portal/loan-card";
 import { PortalSectionTitle } from "@/components/portal/portal-section-title";
 import { TransactionTable } from "@/components/portal/transaction-table";
@@ -63,15 +62,9 @@ export function MemberDashboard({
         )}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <PortalSectionTitle title="Recent Transactions" />
-          <TransactionTable transactions={transactions} />
-        </div>
-        <div>
-          <PortalSectionTitle title="Security Alerts" />
-          <AlertsPanel />
-        </div>
+      <div>
+        <PortalSectionTitle title="Recent Transactions" />
+        <TransactionTable transactions={transactions} />
       </div>
 
       <div>
