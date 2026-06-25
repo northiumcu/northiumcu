@@ -53,13 +53,18 @@ export function verifyPin(pin: string, stored: string): boolean {
 }
 
 export function hashOtp(code: string): string {
+  const normalized = code.replace(/\D/g, "").trim();
   const salt = randomBytes(8).toString("hex");
-  const hash = scryptSync(code, salt, 32).toString("hex");
+  const hash = scryptSync(normalized, salt, 32).toString("hex");
   return `${salt}:${hash}`;
 }
 
 export function verifyOtp(code: string, stored: string): boolean {
-  return verifyPin(code, stored);
+  const normalized = code.replace(/\D/g, "").trim();
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false;
+  const candidate = scryptSync(normalized, salt, 32).toString("hex");
+  return candidate === hash;
 }
 
 export function generateOtpCode(): string {
