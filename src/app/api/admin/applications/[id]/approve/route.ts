@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireStaff } from "@/lib/auth/require-staff";
 
 export async function POST(
   _request: Request,
@@ -8,30 +7,12 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const body = await _request.json().catch(() => ({}));
+    const requireKyc = body.requireKyc !== false;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const admin = createAdminClient();
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("staff_role")
-      .eq("id", user.id)
-      .single();
-
-    if (
-      !profile ||
-      !["administrator", "super_administrator", "operations_manager", "compliance_officer"].includes(
-        profile.staff_role
-      )
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireStaff();
+    if ("error" in auth) return auth.error;
+    const { admin, user } = auth;
 
     const { data: application } = await admin
       .from("membership_applications")
@@ -46,6 +27,7 @@ export async function POST(
       p_application_id: id,
       p_admin_id: user.id,
       p_account_type: primaryType,
+      p_require_kyc: requireKyc,
     });
 
     if (error) {

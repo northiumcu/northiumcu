@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireActiveMemberWrite, requireAuthenticatedMember } from "@/lib/auth/require-member";
 import { verifyPin } from "@/lib/auth/crypto";
 import { pinSchema } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
@@ -26,19 +26,15 @@ function deliveryEta() {
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAuthenticatedMember();
+    if ("error" in auth) return auth.error;
 
-    const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data, error } = await auth.admin
       .from("cards")
       .select(
         "id, card_type, product_name, cardholder_name, last_four, status, delivery_eta, design_variant, linked_account_id, expires_at, created_at"
       )
-      .eq("member_id", user.id)
+      .eq("member_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -57,17 +53,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid application." }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireActiveMemberWrite();
+    if ("error" in auth) return auth.error;
 
     const admin = createAdminClient();
+    const userId = auth.user.id;
     const { data: profile } = await admin
       .from("profiles")
       .select("pin_hash, first_name, last_name")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single();
 
     if (!profile?.pin_hash || !verifyPin(parsed.data.pin, profile.pin_hash)) {
@@ -78,7 +72,7 @@ export async function POST(request: Request) {
       .from("accounts")
       .select("id, available_balance, status")
       .eq("id", parsed.data.sourceAccountId)
-      .eq("member_id", user.id)
+      .eq("member_id", userId)
       .single();
 
     if (!account || account.status !== "active") {
@@ -95,7 +89,7 @@ export async function POST(request: Request) {
     const { data: existing } = await admin
       .from("cards")
       .select("id")
-      .eq("member_id", user.id)
+      .eq("member_id", userId)
       .eq("product_name", "Northium Mastercard")
       .in("status", ["ordered", "issued", "pending_activation", "active"])
       .maybeSingle();
@@ -120,7 +114,7 @@ export async function POST(request: Request) {
     const { data: card, error: cardError } = await admin
       .from("cards")
       .insert({
-        member_id: user.id,
+        member_id: userId,
         linked_account_id: account.id,
         card_type: "mastercard",
         product_name: "Northium Mastercard",
@@ -144,7 +138,7 @@ export async function POST(request: Request) {
     }
 
     await notifyMember(admin, {
-      userId: user.id,
+      userId: userId,
       title: "Mastercard application received",
       message: `Your Northium Mastercard is being prepared. Estimated delivery: 7–30 business days.`,
       category: "transactional",

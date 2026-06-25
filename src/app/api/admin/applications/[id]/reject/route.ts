@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { notifyMember } from "@/lib/banking/member-notifications";
 
 export async function POST(
   request: Request,
@@ -12,25 +12,15 @@ export async function POST(
     const reason =
       typeof body.reason === "string" ? body.reason : "Application rejected.";
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await requireStaff();
+    if ("error" in auth) return auth.error;
+    const { admin, user } = auth;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const admin = createAdminClient();
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("staff_role")
-      .eq("id", user.id)
+    const { data: app } = await admin
+      .from("membership_applications")
+      .select("profile_id")
+      .eq("id", id)
       .single();
-
-    if (!profile || profile.staff_role === "member") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
 
     const { error: appError } = await admin
       .from("membership_applications")
@@ -55,6 +45,15 @@ export async function POST(
         reviewed_at: new Date().toISOString(),
       })
       .eq("application_id", id);
+
+    if (app?.profile_id) {
+      await notifyMember(admin, {
+        userId: app.profile_id,
+        title: "Membership application declined",
+        message: reason,
+        category: "transactional",
+      });
+    }
 
     return NextResponse.json({ message: "Application rejected." });
   } catch (error) {

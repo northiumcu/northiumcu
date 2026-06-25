@@ -8,6 +8,7 @@ export const MEMBER_STATUSES = [
   "applicant",
   "verified",
   "active",
+  "paused",
   "dormant",
   "suspended",
   "closed",

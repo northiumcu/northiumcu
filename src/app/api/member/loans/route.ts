@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireActiveMemberWrite, requireAuthenticatedMember } from "@/lib/auth/require-member";
 import { notifyMember } from "@/lib/banking/member-notifications";
 
 const applySchema = z.object({
@@ -13,19 +13,15 @@ const applySchema = z.object({
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAuthenticatedMember();
+    if ("error" in auth) return auth.error;
 
-    const admin = createAdminClient();
-    const { data, error } = await admin
+    const { data, error } = await auth.admin
       .from("loans")
       .select(
         "id, loan_type, purpose, principal_amount, requested_amount, outstanding_balance, interest_rate, term_months, status, monthly_payment, funded_at, created_at, admin_note"
       )
-      .eq("member_id", user.id)
+      .eq("member_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -55,19 +51,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: firstError ?? "Invalid application." }, { status: 400 });
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireActiveMemberWrite();
+    if ("error" in auth) return auth.error;
 
     const admin = createAdminClient();
     const input = parsed.data;
+    const userId = auth.user.id;
 
     const { data: loan, error } = await admin
       .from("loans")
       .insert({
-        member_id: user.id,
+        member_id: userId,
         loan_type: input.loanType,
         purpose: input.purpose,
         principal_amount: input.requestedAmount,
@@ -85,7 +79,7 @@ export async function POST(request: Request) {
     }
 
     await notifyMember(admin, {
-      userId: user.id,
+      userId: userId,
       title: "Loan application submitted",
       message: `Your ${input.loanType.replace("_", " ")} application is under review.`,
       category: "transactional",

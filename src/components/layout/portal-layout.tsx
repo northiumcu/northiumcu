@@ -3,6 +3,7 @@ import { Footer } from "@/components/layout/footer";
 import { PortalMobileNav } from "@/components/layout/portal-mobile-nav";
 import { PortalSidebar } from "@/components/layout/portal-sidebar";
 import { MemberAvatarBadge } from "@/components/portal/member-avatar-badge";
+import { MemberPausedBanner } from "@/components/portal/member-paused-banner";
 
 interface NavItem {
   label: string;
@@ -41,6 +42,7 @@ export function PortalLayout({
           <PortalMobileNav nav={nav} title={title} />
           <main className="flex-1 overflow-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {title === "Member Portal" && <MemberAvatarBadge />}
+            {title === "Member Portal" && <MemberPausedBanner />}
             {children}
           </main>
         </div>

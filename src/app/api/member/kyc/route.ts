@@ -1,36 +1,29 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   encryptSensitive,
   lastFour,
 } from "@/lib/auth/crypto";
+import { requireActiveMemberWrite, requireAuthenticatedMember } from "@/lib/auth/require-member";
 import { kycSubmitSchema } from "@/lib/auth/validators";
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const auth = await requireAuthenticatedMember();
+    if ("error" in auth) return auth.error;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const admin = createAdminClient();
-    const { data: application } = await admin
+    const { data: application } = await auth.admin
       .from("membership_applications")
       .select("id, status, requested_account_types")
-      .eq("profile_id", user.id)
+      .eq("profile_id", auth.user.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const { data: kyc } = await admin
+    const { data: kyc } = await auth.admin
       .from("kyc_verifications")
       .select("id, status, id_document_type, reviewed_at, rejection_reason")
-      .eq("profile_id", user.id)
+      .eq("profile_id", auth.user.id)
       .maybeSingle();
 
     const needsKyc =
@@ -54,14 +47,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireActiveMemberWrite();
+    if ("error" in auth) return auth.error;
 
     const body = await request.json();
     const parsed = kycSubmitSchema.safeParse(body);
@@ -74,11 +61,12 @@ export async function POST(request: Request) {
 
     const data = parsed.data;
     const admin = createAdminClient();
+    const userId = auth.user.id;
 
     const { data: openApplication } = await admin
       .from("membership_applications")
       .select("id, status")
-      .eq("profile_id", user.id)
+      .eq("profile_id", userId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -97,7 +85,7 @@ export async function POST(request: Request) {
     const { data: existingKyc } = await admin
       .from("kyc_verifications")
       .select("status")
-      .eq("profile_id", user.id)
+      .eq("profile_id", userId)
       .maybeSingle();
 
     if (
@@ -114,7 +102,7 @@ export async function POST(request: Request) {
     const idNumber = data.idDocumentNumber.trim();
 
     const kycPayload = {
-      profile_id: user.id,
+      profile_id: userId,
       application_id: openApplication.id,
       status: "under_review" as const,
       ssn_last_four: lastFour(ssnDigits),
@@ -132,7 +120,7 @@ export async function POST(request: Request) {
     const { data: existing } = await admin
       .from("kyc_verifications")
       .select("id")
-      .eq("profile_id", user.id)
+      .eq("profile_id", userId)
       .maybeSingle();
 
     if (existing?.id) {

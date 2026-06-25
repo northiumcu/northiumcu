@@ -36,6 +36,7 @@ export default function AdminMembersPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,30 +54,60 @@ export default function AdminMembersPage() {
     void load();
   }, [load]);
 
-  async function approve(id: string) {
+  async function approve(id: string, requireKyc: boolean) {
+    setBusyId(id);
     setMessage(null);
     const response = await fetch(`/api/admin/applications/${id}/approve`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requireKyc }),
     });
     const data = await response.json();
+    setBusyId(null);
     if (!response.ok) {
       setMessage(data.error ?? "Approval failed.");
       return;
     }
     setMessage(
-      `Approved. Account number issued: ${data.account?.account_number ?? "created"}.`
+      `Approved${requireKyc ? " with KYC" : " without KYC"}. Account number: ${data.account?.account_number ?? "created"}.`
     );
     void load();
   }
 
+  async function markPending(id: string) {
+    setBusyId(id);
+    setMessage(null);
+    const response = await fetch(`/api/admin/applications/${id}/pending`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await response.json();
+    setBusyId(null);
+    if (!response.ok) {
+      setMessage(data.error ?? "Update failed.");
+      return;
+    }
+    setMessage("Application marked pending review.");
+    void load();
+  }
+
   async function reject(id: string) {
+    const reason = window.prompt(
+      "Rejection reason (shown to applicant):",
+      "We could not verify your application at this time."
+    );
+    if (reason === null) return;
+
+    setBusyId(id);
     setMessage(null);
     const response = await fetch(`/api/admin/applications/${id}/reject`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "KYC could not be verified." }),
+      body: JSON.stringify({ reason }),
     });
     const data = await response.json();
+    setBusyId(null);
     if (!response.ok) {
       setMessage(data.error ?? "Rejection failed.");
       return;
@@ -89,8 +120,14 @@ export default function AdminMembersPage() {
     const kyc = Array.isArray(app.kyc_verifications)
       ? app.kyc_verifications[0]
       : app.kyc_verifications;
-    if (!kyc) return "—";
-    return `SSN •••${kyc.ssn_last_four} · ${kyc.id_document_type.replace("_", " ")} •••${kyc.id_document_last_four}`;
+    if (!kyc) return "Not submitted";
+    return `SSN •••${kyc.ssn_last_four} · ${kyc.id_document_type.replace("_", " ")} •••${kyc.id_document_last_four} (${kyc.status})`;
+  }
+
+  function statusBadgeClass(status: string) {
+    if (status === "draft") return "bg-white/10 text-white/70";
+    if (status === "under_review") return "bg-amber-500/15 text-amber-200";
+    return "bg-northium-gold/10 text-northium-gold";
   }
 
   return (
@@ -100,7 +137,8 @@ export default function AdminMembersPage() {
           KYC & Membership Review
         </h1>
         <p className="mt-1 text-sm text-white/55">
-          Approve identity verification to issue a 12-digit account number.
+          Review new applications, approve with or without KYC, mark pending, or
+          reject.
         </p>
       </div>
 
@@ -136,44 +174,73 @@ export default function AdminMembersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              applications.map((app) => (
-                <TableRow key={app.id} className="border-white/10 text-white/85">
-                  <TableCell className="font-medium">
-                    {app.first_name} {app.last_name}
-                  </TableCell>
-                  <TableCell className="text-white/60">{app.email}</TableCell>
-                  <TableCell className="text-xs capitalize text-white/60">
-                    {(app.requested_account_types ?? ["checking"]).join(", ")}
-                  </TableCell>
-                  <TableCell className="max-w-xs text-xs text-white/60">
-                    {formatKyc(app)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className="bg-northium-gold/10 text-northium-gold">
-                      {app.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
-                        onClick={() => void approve(app.id)}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-white/20 bg-transparent text-white hover:bg-white/5"
-                        onClick={() => void reject(app.id)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              applications.map((app) => {
+                const busy = busyId === app.id;
+                const hasKyc = formatKyc(app) !== "Not submitted";
+                return (
+                  <TableRow key={app.id} className="border-white/10 text-white/85">
+                    <TableCell className="font-medium">
+                      {app.first_name} {app.last_name}
+                    </TableCell>
+                    <TableCell className="text-white/60">{app.email}</TableCell>
+                    <TableCell className="text-xs capitalize text-white/60">
+                      {(app.requested_account_types ?? ["checking"]).join(", ")}
+                    </TableCell>
+                    <TableCell className="max-w-xs text-xs text-white/60">
+                      {formatKyc(app)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={statusBadgeClass(app.status)}>
+                        {app.status.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
+                          onClick={() => void approve(app.id, true)}
+                        >
+                          Approve (KYC)
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          variant="outline"
+                          className="border-white/20 bg-transparent text-white hover:bg-white/5"
+                          onClick={() => void approve(app.id, false)}
+                        >
+                          Approve (no KYC)
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={busy || app.status === "under_review"}
+                          variant="outline"
+                          className="border-amber-500/30 bg-transparent text-amber-200 hover:bg-amber-500/10"
+                          onClick={() => void markPending(app.id)}
+                        >
+                          Pending
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          variant="outline"
+                          className="border-red-500/30 bg-transparent text-red-200 hover:bg-red-500/10"
+                          onClick={() => void reject(app.id)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                      {!hasKyc && (
+                        <p className="mt-2 text-xs text-white/40">
+                          No KYC yet — use Approve (no KYC) or wait for submission.
+                        </p>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

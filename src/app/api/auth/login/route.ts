@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolvePostLoginPath,
 } from "@/lib/auth/admin-paths";
+import { SUSPENDED_MESSAGE } from "@/lib/auth/require-member";
 import { generateOtpCode, hashOtp, verifyPin } from "@/lib/auth/crypto";
 import { loginSchema } from "@/lib/auth/validators";
 import { sendOtpEmail } from "@/lib/email/send-otp";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
 
     const { data: profile, error } = await admin
       .from("profiles")
-      .select("id, email, pin_hash, staff_role, email_verified_at")
+      .select("id, email, pin_hash, staff_role, email_verified_at, member_status")
       .ilike("username", normalizedUsername)
       .single();
 
@@ -36,6 +37,10 @@ export async function POST(request: Request) {
         { error: "Invalid username or PIN." },
         { status: 401 }
       );
+    }
+
+    if (profile.member_status === "suspended") {
+      return NextResponse.json({ error: SUSPENDED_MESSAGE, suspended: true }, { status: 403 });
     }
 
     const isStaff = profile.staff_role !== "member";

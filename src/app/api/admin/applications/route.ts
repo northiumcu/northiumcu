@@ -53,7 +53,7 @@ export async function GET() {
         )
       `
       )
-      .in("status", ["submitted", "under_review"])
+      .in("status", ["draft", "submitted", "under_review"])
       .order("submitted_at", { ascending: false });
 
     if (error) {

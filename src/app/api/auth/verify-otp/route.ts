@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptSensitive, verifyOtp } from "@/lib/auth/crypto";
 import { resolvePostLoginPath } from "@/lib/auth/admin-paths";
+import { SUSPENDED_MESSAGE } from "@/lib/auth/require-member";
 import { sendWelcomeMemberEmail } from "@/lib/email/send-welcome";
 import { otpVerifySchema } from "@/lib/auth/validators";
 
@@ -167,12 +168,16 @@ export async function POST(request: Request) {
     if (challenge.purpose === "login" && challenge.profile_id) {
       const { data: profile, error: profileError } = await admin
         .from("profiles")
-        .select("email, internal_auth_secret, staff_role")
+        .select("email, internal_auth_secret, staff_role, member_status")
         .eq("id", challenge.profile_id)
         .single();
 
       if (profileError || !profile?.internal_auth_secret) {
         return NextResponse.json({ error: "Account not found." }, { status: 404 });
+      }
+
+      if (profile.member_status === "suspended") {
+        return NextResponse.json({ error: SUSPENDED_MESSAGE, suspended: true }, { status: 403 });
       }
 
       const internalPassword = decryptSensitive(profile.internal_auth_secret);

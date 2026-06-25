@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,17 +18,36 @@ interface Profile {
 
 export function MemberProfileClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [paused, setPaused] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    void fetch("/api/member/profile")
-      .then((r) => r.json())
-      .then((data) => setProfile(data.profile ?? null));
+  const loadProfile = useCallback(async () => {
+    const response = await fetch("/api/member/profile");
+    const data = await response.json();
+    if (response.ok && data.profile) {
+      setProfile(data.profile);
+      setFirstName(data.profile.first_name);
+      setLastName(data.profile.last_name);
+      setPhone(data.profile.phone ?? "");
+      setPaused(Boolean(data.paused));
+    }
   }, []);
 
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
   async function uploadAvatar(file: File) {
+    if (paused) {
+      setError("Profile changes are disabled while your account is paused.");
+      return;
+    }
     if (file.size > 400_000) {
       setError("Image must be under 400KB.");
       return;
@@ -47,9 +66,40 @@ export function MemberProfileClient() {
         return;
       }
       setMessage("Profile photo updated.");
-      setProfile((p) => (p ? { ...p, avatar_url: data.avatarUrl } : p));
+      setError(null);
+      setProfile((p) =>
+        p ? { ...p, avatar_url: data.profile?.avatar_url ?? avatarUrl } : p
+      );
     };
     reader.readAsDataURL(file);
+  }
+
+  async function saveDetails(event: React.FormEvent) {
+    event.preventDefault();
+    if (paused) {
+      setError("Profile changes are disabled while your account is paused.");
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    const response = await fetch("/api/member/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        phone: phone.trim() || null,
+      }),
+    });
+    const data = await response.json();
+    setSaving(false);
+    if (!response.ok) {
+      setError(data.error ?? "Save failed.");
+      return;
+    }
+    setMessage("Profile updated.");
+    if (data.profile) setProfile(data.profile);
   }
 
   if (!profile) {
@@ -58,6 +108,13 @@ export function MemberProfileClient() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">
+      {paused && (
+        <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          Your account is paused. You can view your profile but cannot make changes
+          until your account officer restores access.
+        </div>
+      )}
+
       <Card className="rounded-2xl border-northium-border shadow-sm">
         <CardHeader>
           <CardTitle className="font-heading text-lg text-northium-primary">
@@ -90,6 +147,7 @@ export function MemberProfileClient() {
               type="file"
               accept="image/*"
               className="hidden"
+              disabled={paused}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void uploadAvatar(file);
@@ -98,12 +156,11 @@ export function MemberProfileClient() {
             <Button
               variant="outline"
               size="sm"
+              disabled={paused}
               onClick={() => fileRef.current?.click()}
             >
               Upload Photo
             </Button>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            {message && <p className="text-sm text-northium-success">{message}</p>}
           </div>
         </CardContent>
       </Card>
@@ -114,29 +171,71 @@ export function MemberProfileClient() {
             Personal Information
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>First Name</Label>
-              <Input value={profile.first_name} readOnly className="rounded-xl bg-northium-surface" />
+        <CardContent>
+          <form onSubmit={saveDetails} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name</Label>
+                <Input
+                  id="firstName"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  readOnly={paused}
+                  className="rounded-xl bg-northium-surface"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input
+                  id="lastName"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  readOnly={paused}
+                  className="rounded-xl bg-northium-surface"
+                  required
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Last Name</Label>
-              <Input value={profile.last_name} readOnly className="rounded-xl bg-northium-surface" />
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                value={profile.email}
+                readOnly
+                className="rounded-xl bg-northium-surface"
+              />
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={profile.email} readOnly className="rounded-xl bg-northium-surface" />
-          </div>
-          <div className="space-y-2">
-            <Label>Member Number</Label>
-            <Input
-              value={profile.member_number ?? "Pending"}
-              readOnly
-              className="rounded-xl bg-northium-surface"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                readOnly={paused}
+                className="rounded-xl bg-northium-surface"
+                placeholder="(555) 555-0100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Member Number</Label>
+              <Input
+                value={profile.member_number ?? "Pending approval"}
+                readOnly
+                className="rounded-xl bg-northium-surface"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            {message && <p className="text-sm text-northium-success">{message}</p>}
+            <Button
+              type="submit"
+              disabled={paused || saving}
+              className="bg-northium-primary hover:bg-northium-secondary"
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
