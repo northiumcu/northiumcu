@@ -15,6 +15,38 @@ type GenerateInput = {
   creditCount: number;
   periodStart: string;
   periodEnd: string;
+  payrollMinAmount: number;
+  payrollMaxAmount: number;
+  payrollFrequency: PayrollFrequency;
+};
+
+export type PayrollFrequency =
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "bi_weekly"
+  | "monthly";
+
+export const PAYROLL_FREQUENCY_OPTIONS: {
+  value: PayrollFrequency;
+  label: string;
+  description: string;
+}[] = [
+  { value: "hourly", label: "Hourly", description: "Deposits spread across working hours" },
+  { value: "daily", label: "Daily", description: "One payroll deposit per day" },
+  { value: "weekly", label: "Weekly", description: "Payroll every 7 days (Fridays)" },
+  {
+    value: "bi_weekly",
+    label: "Bi-weekly",
+    description: "Payroll every 14 days",
+  },
+  { value: "monthly", label: "Monthly", description: "Payroll on the same day each month" },
+];
+
+export type PayrollSettings = {
+  minAmount: number;
+  maxAmount: number;
+  frequency: PayrollFrequency;
 };
 
 type GeneratedSummary = {
@@ -25,6 +57,9 @@ type GeneratedSummary = {
   endingBalance: number;
   periodStart: string;
   periodEnd: string;
+  payrollFrequency: PayrollFrequency;
+  payrollMinAmount: number;
+  payrollMaxAmount: number;
 };
 
 type PlannedTransaction = {
@@ -67,6 +102,54 @@ export function defaultActivityPeriod(): { periodStart: string; periodEnd: strin
   return {
     periodStart: defaultPeriodStart(),
     periodEnd: defaultPeriodEnd(),
+  };
+}
+
+export function defaultPayrollSettings(): PayrollSettings {
+  return {
+    minAmount: 850,
+    maxAmount: 3200,
+    frequency: "bi_weekly",
+  };
+}
+
+export function payrollFrequencyLabel(frequency: PayrollFrequency): string {
+  return (
+    PAYROLL_FREQUENCY_OPTIONS.find((option) => option.value === frequency)?.label ??
+    frequency
+  );
+}
+
+export function resolvePayrollSettings(input: {
+  payrollMinAmount?: number;
+  payrollMaxAmount?: number;
+  payrollFrequency?: string;
+}): PayrollSettings {
+  const defaults = defaultPayrollSettings();
+  const minAmount = Number(input.payrollMinAmount ?? defaults.minAmount);
+  const maxAmount = Number(input.payrollMaxAmount ?? defaults.maxAmount);
+  const frequency = (input.payrollFrequency ?? defaults.frequency) as PayrollFrequency;
+
+  if (!PAYROLL_FREQUENCY_OPTIONS.some((option) => option.value === frequency)) {
+    throw new Error("Choose a valid payroll frequency.");
+  }
+
+  if (!Number.isFinite(minAmount) || minAmount <= 0) {
+    throw new Error("Payroll minimum amount must be greater than zero.");
+  }
+
+  if (!Number.isFinite(maxAmount) || maxAmount < minAmount) {
+    throw new Error("Payroll maximum must be greater than or equal to the minimum.");
+  }
+
+  if (maxAmount > 1_000_000) {
+    throw new Error("Payroll maximum cannot exceed $1,000,000.");
+  }
+
+  return {
+    minAmount: roundMoney(minAmount),
+    maxAmount: roundMoney(maxAmount),
+    frequency,
   };
 }
 
@@ -146,51 +229,114 @@ function clampToRange(date: Date, range: DateRange): Date {
   return date;
 }
 
-function collectPayrollDays(range: DateRange): Date[] {
-  const days: Date[] = [];
+function findLastWeekday(range: DateRange, weekday: number): Date {
   const cursor = new Date(range.end);
   cursor.setHours(10, 0, 0, 0);
 
   while (cursor.getTime() >= range.start.getTime()) {
-    const day = cursor.getDay();
-    if (day === 3 || day === 5) {
-      days.push(new Date(cursor));
+    if (cursor.getDay() === weekday) {
+      return new Date(cursor);
     }
     cursor.setDate(cursor.getDate() - 1);
   }
 
-  return days.reverse();
+  return new Date(range.start);
 }
 
-function pickEvenlySpacedDates(pool: Date[], count: number): Date[] {
-  if (count <= 0) return [];
-  if (pool.length === 0) return [];
-  if (pool.length <= count) return pool.slice(0, count);
+function collectPayrollScheduleSlots(
+  frequency: PayrollFrequency,
+  range: DateRange,
+  maxSlots = 5000
+): Date[] {
+  const slots: Date[] = [];
 
-  const picked: Date[] = [];
-  const step = pool.length / count;
-  for (let i = 0; i < count; i += 1) {
-    const index = Math.min(pool.length - 1, Math.floor(i * step + step / 2));
-    picked.push(pool[index]!);
+  switch (frequency) {
+    case "hourly": {
+      const cursor = new Date(range.start);
+      cursor.setMinutes(0, 0, 0);
+      while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
+        const hour = cursor.getHours();
+        if (hour >= 6 && hour <= 22) {
+          slots.push(new Date(cursor));
+        }
+        cursor.setHours(cursor.getHours() + 1);
+      }
+      break;
+    }
+    case "daily": {
+      const cursor = new Date(range.start);
+      cursor.setHours(10, 0, 0, 0);
+      while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
+        slots.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      break;
+    }
+    case "weekly": {
+      let cursor = findLastWeekday(range, 5);
+      while (cursor.getTime() >= range.start.getTime() && slots.length < maxSlots) {
+        slots.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() - 7);
+      }
+      return slots.reverse();
+    }
+    case "bi_weekly": {
+      let cursor = new Date(range.end);
+      cursor.setHours(10, 0, 0, 0);
+      while (cursor.getTime() >= range.start.getTime() && slots.length < maxSlots) {
+        slots.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() - 14);
+      }
+      return slots.reverse();
+    }
+    case "monthly": {
+      const anchorDay = range.start.getDate();
+      const cursor = new Date(range.start);
+      cursor.setHours(10, 0, 0, 0);
+
+      while (cursor.getTime() <= range.end.getTime() && slots.length < maxSlots) {
+        slots.push(new Date(cursor));
+        cursor.setMonth(cursor.getMonth() + 1);
+        const lastDay = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth() + 1,
+          0
+        ).getDate();
+        cursor.setDate(Math.min(anchorDay, lastDay));
+        cursor.setHours(10, 0, 0, 0);
+      }
+      break;
+    }
+    default:
+      break;
   }
 
-  return picked.sort((a, b) => a.getTime() - b.getTime());
+  return slots;
 }
 
-function payrollDatesInRange(count: number, range: DateRange): Date[] {
+function payrollDatesInRange(
+  count: number,
+  range: DateRange,
+  frequency: PayrollFrequency
+): Date[] {
   if (count <= 0) return [];
 
-  const payrollDays = collectPayrollDays(range);
-  if (payrollDays.length > 0) {
-    return pickEvenlySpacedDates(payrollDays, count).map((date) =>
-      clampToRange(withRandomTime(date, 9, 11), range)
+  const scheduleSlots = collectPayrollScheduleSlots(frequency, range);
+  if (scheduleSlots.length > 0) {
+    const hourMin = frequency === "hourly" ? 6 : 9;
+    const hourMax = frequency === "hourly" ? 22 : 11;
+    return pickEvenlySpacedDates(scheduleSlots, count).map((date) =>
+      clampToRange(
+        frequency === "hourly" ? date : withRandomTime(date, hourMin, hourMax),
+        range
+      )
     );
   }
 
   return spreadDatesAcrossRange(count, range, {
     hourMin: 9,
     hourMax: 11,
-    preferWeekdays: true,
+    preferWeekdays: frequency !== "hourly" && frequency !== "daily",
   });
 }
 
@@ -254,6 +400,21 @@ function spreadDatesAcrossRange(
   return results.sort((a, b) => a.getTime() - b.getTime());
 }
 
+function pickEvenlySpacedDates(pool: Date[], count: number): Date[] {
+  if (count <= 0) return [];
+  if (pool.length === 0) return [];
+  if (pool.length <= count) return pool.slice(0, count);
+
+  const picked: Date[] = [];
+  const step = pool.length / count;
+  for (let i = 0; i < count; i += 1) {
+    const index = Math.min(pool.length - 1, Math.floor(i * step + step / 2));
+    picked.push(pool[index]!);
+  }
+
+  return picked.sort((a, b) => a.getTime() - b.getTime());
+}
+
 function splitCreditCounts(creditCount: number): { payroll: number; other: number } {
   if (creditCount <= 0) {
     return { payroll: 0, other: 0 };
@@ -272,19 +433,20 @@ function splitCreditCounts(creditCount: number): { payroll: number; other: numbe
 function planCredits(
   creditCount: number,
   company: string,
-  range: DateRange
+  range: DateRange,
+  payroll: PayrollSettings
 ): PlannedTransaction[] {
   if (creditCount <= 0) return [];
 
-  const { payroll, other } = splitCreditCounts(creditCount);
+  const { payroll: payrollCount, other } = splitCreditCounts(creditCount);
   const planned: PlannedTransaction[] = [];
-  const payrollDatesList = payrollDatesInRange(payroll, range);
+  const payrollDatesList = payrollDatesInRange(payrollCount, range, payroll.frequency);
   const usedDays = new Set(payrollDatesList.map(dateKey));
 
   for (const postedAt of payrollDatesList) {
     planned.push({
       direction: "credit",
-      amount: randomBetween(850, 3200),
+      amount: randomBetween(payroll.minAmount, payroll.maxAmount),
       type: "deposit",
       description: `Direct Deposit — ${company}`,
       postedAt,
@@ -421,13 +583,18 @@ export async function generateMemberTransactions(
   const creditCount = Math.max(0, Math.floor(input.creditCount));
   const debitCount = Math.max(0, Math.floor(input.debitCount));
   const range = resolveActivityPeriod(input.periodStart, input.periodEnd);
+  const payroll = resolvePayrollSettings({
+    payrollMinAmount: input.payrollMinAmount,
+    payrollMaxAmount: input.payrollMaxAmount,
+    payrollFrequency: input.payrollFrequency,
+  });
 
   if (creditCount === 0 && debitCount === 0) {
     throw new Error("Set at least one debit or credit to generate.");
   }
 
   const startingBalance = await getAccountBalance(admin, input.accountId);
-  const credits = planCredits(creditCount, company, range);
+  const credits = planCredits(creditCount, company, range, payroll);
   const debits = planDebits(debitCount, state, range);
 
   const totalCreditAmount = roundMoney(
@@ -465,5 +632,8 @@ export async function generateMemberTransactions(
     endingBalance,
     periodStart: formatCalendarDate(range.start),
     periodEnd: formatCalendarDate(range.end),
+    payrollFrequency: payroll.frequency,
+    payrollMinAmount: payroll.minAmount,
+    payrollMaxAmount: payroll.maxAmount,
   };
 }

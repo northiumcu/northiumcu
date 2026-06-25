@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { generateMemberTransactions } from "@/lib/banking/generate-member-transactions";
+import { generateMemberTransactions, PAYROLL_FREQUENCY_OPTIONS } from "@/lib/banking/generate-member-transactions";
+
+const payrollFrequencySchema = z.enum(
+  PAYROLL_FREQUENCY_OPTIONS.map((option) => option.value) as [
+    "hourly",
+    "daily",
+    "weekly",
+    "bi_weekly",
+    "monthly",
+  ]
+);
 
 const generateSchema = z
   .object({
@@ -20,6 +30,9 @@ const generateSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD for the end date.")
       .optional(),
+    payrollMinAmount: z.number().positive().max(1_000_000).optional(),
+    payrollMaxAmount: z.number().positive().max(1_000_000).optional(),
+    payrollFrequency: payrollFrequencySchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.periodStart && value.periodEnd && value.periodStart > value.periodEnd) {
@@ -27,6 +40,18 @@ const generateSchema = z
         code: z.ZodIssueCode.custom,
         message: "Activity period start must be on or before the end date.",
         path: ["periodEnd"],
+      });
+    }
+
+    if (
+      value.payrollMinAmount !== undefined &&
+      value.payrollMaxAmount !== undefined &&
+      value.payrollMaxAmount < value.payrollMinAmount
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Payroll maximum must be greater than or equal to the minimum.",
+        path: ["payrollMaxAmount"],
       });
     }
   });
@@ -91,6 +116,9 @@ export async function POST(
       creditCount: input.creditCount,
       periodStart: input.periodStart ?? "",
       periodEnd: input.periodEnd ?? "",
+      payrollMinAmount: input.payrollMinAmount ?? 850,
+      payrollMaxAmount: input.payrollMaxAmount ?? 3200,
+      payrollFrequency: input.payrollFrequency ?? "bi_weekly",
     });
 
     const { data: updatedAccount } = await admin

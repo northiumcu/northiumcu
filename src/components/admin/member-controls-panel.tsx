@@ -10,7 +10,12 @@ import {
   AdminActionFeedback,
   type AdminFeedback,
 } from "@/components/admin/admin-action-feedback";
-import { defaultActivityPeriod } from "@/lib/banking/generate-member-transactions";
+import {
+  defaultActivityPeriod,
+  defaultPayrollSettings,
+  PAYROLL_FREQUENCY_OPTIONS,
+  payrollFrequencyLabel,
+} from "@/lib/banking/generate-member-transactions";
 
 interface MemberAccount {
   id: string;
@@ -79,6 +84,15 @@ export function MemberControlsPanel({
   const [creditCount, setCreditCount] = useState("8");
   const [periodStart, setPeriodStart] = useState(() => defaultActivityPeriod().periodStart);
   const [periodEnd, setPeriodEnd] = useState(() => defaultActivityPeriod().periodEnd);
+  const [payrollMinAmount, setPayrollMinAmount] = useState(
+    () => String(defaultPayrollSettings().minAmount)
+  );
+  const [payrollMaxAmount, setPayrollMaxAmount] = useState(
+    () => String(defaultPayrollSettings().maxAmount)
+  );
+  const [payrollFrequency, setPayrollFrequency] = useState(
+    () => defaultPayrollSettings().frequency
+  );
 
   const [cotCode, setCotCode] = useState("");
   const [imfCode, setImfCode] = useState("");
@@ -190,6 +204,9 @@ export function MemberControlsPanel({
           creditCount: Number(creditCount),
           periodStart,
           periodEnd,
+          payrollMinAmount: Number(payrollMinAmount),
+          payrollMaxAmount: Number(payrollMaxAmount),
+          payrollFrequency,
         }),
       }
     );
@@ -203,10 +220,15 @@ export function MemberControlsPanel({
     const rangeLabel = data.summary.periodStart && data.summary.periodEnd
       ? `${data.summary.periodStart} through ${data.summary.periodEnd}`
       : `${periodStart} through ${periodEnd}`;
+    const payrollLabel = payrollFrequencyLabel(
+      data.summary.payrollFrequency ?? payrollFrequency
+    );
+    const payrollMin = Number(data.summary.payrollMinAmount ?? payrollMinAmount);
+    const payrollMax = Number(data.summary.payrollMaxAmount ?? payrollMaxAmount);
     showFeedback(
       "generate",
       "success",
-      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}) from ${rangeLabel}. Payroll credits use ${company} twice weekly. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
+      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}) from ${rangeLabel}. Payroll from ${company} runs ${payrollLabel.toLowerCase()} at $${payrollMin.toFixed(2)}–$${payrollMax.toFixed(2)} per deposit. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
     );
     void load();
   }
@@ -479,9 +501,58 @@ export function MemberControlsPanel({
                     className="rounded-xl border-white/15 bg-[#06121c] text-white"
                   />
                   <p className="text-xs text-white/45">
-                    Payroll credits post twice per week from this company.
+                    Payroll direct deposits use the amount range and schedule below.
                   </p>
                 </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label className="text-white/70">Payroll Min ($)</Label>
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={payrollMinAmount}
+                      onChange={(e) => setPayrollMinAmount(e.target.value)}
+                      className="rounded-xl border-white/15 bg-[#06121c] text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-white/70">Payroll Max ($)</Label>
+                    <Input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={payrollMaxAmount}
+                      onChange={(e) => setPayrollMaxAmount(e.target.value)}
+                      className="rounded-xl border-white/15 bg-[#06121c] text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-white/70">Payroll Schedule</Label>
+                    <select
+                      value={payrollFrequency}
+                      onChange={(e) =>
+                        setPayrollFrequency(
+                          e.target.value as typeof payrollFrequency
+                        )
+                      }
+                      className="w-full rounded-xl border border-white/15 bg-[#06121c] px-3 py-2 text-sm"
+                    >
+                      {PAYROLL_FREQUENCY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-xs text-white/45">
+                  {
+                    PAYROLL_FREQUENCY_OPTIONS.find(
+                      (option) => option.value === payrollFrequency
+                    )?.description
+                  }
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-white/70">Activity From</Label>
@@ -542,8 +613,8 @@ export function MemberControlsPanel({
                 </div>
                 <p className="text-xs text-white/45">
                   Choose any date range — past or future. Credits and debits are
-                  spaced across the period like regular account usage, with payroll
-                  on Wednesdays and Fridays.
+                  spaced across the period like regular account usage. Each payroll
+                  deposit stays within your min/max range on the selected schedule.
                 </p>
                 <Button
                   disabled={busy || !employerCompanyName.trim()}
