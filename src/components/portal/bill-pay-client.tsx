@@ -398,9 +398,10 @@ export function BillPayClient() {
 
                 <PinInput
                   id="bill-pay-pin"
-                  label="Account PIN"
+                  label="4-Digit Transaction PIN"
                   value={pin}
                   onChange={setPin}
+                  length={4}
                   variant="compact"
                   required
                 />
@@ -409,7 +410,7 @@ export function BillPayClient() {
 
                 <Button
                   type="submit"
-                  disabled={busy || pin.length !== 6}
+                  disabled={busy || pin.length !== 4}
                   className="w-full bg-gradient-to-r from-rose-600 to-orange-500 hover:from-rose-700 hover:to-orange-600"
                 >
                   {busy ? "Processing..." : "Submit Payment"}

@@ -254,13 +254,15 @@ export default function SignInContent() {
                       label="New Account PIN"
                       value={newPin}
                       onChange={setNewPin}
+                      length={6}
                       required
                     />
                     <PinInput
                       id="confirm-new-pin"
-                      label="Confirm New PIN"
+                      label="Confirm Account PIN"
                       value={confirmPin}
                       onChange={setConfirmPin}
+                      length={6}
                       required
                     />
                     {error && (
@@ -321,6 +323,7 @@ export default function SignInContent() {
                       label="Account PIN"
                       value={pin}
                       onChange={setPin}
+                      length={6}
                       required
                     />
                     {error && (

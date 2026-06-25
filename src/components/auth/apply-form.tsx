@@ -63,6 +63,8 @@ export function ApplyForm() {
     phone: "",
     pin: "",
     confirmPin: "",
+    transactionPin: "",
+    confirmTransactionPin: "",
     eligibilityCategory: ELIGIBILITY_OPTIONS[0],
     requestedAccountType: "checking" as AccountType,
   });
@@ -209,6 +211,8 @@ export function ApplyForm() {
         phone: form.phone,
         pin: form.pin,
         confirmPin: form.confirmPin,
+        transactionPin: form.transactionPin,
+        confirmTransactionPin: form.confirmTransactionPin,
         eligibilityCategory: form.eligibilityCategory,
         requestedAccountType: form.requestedAccountType,
         humanCheckToken,
@@ -403,6 +407,7 @@ export function ApplyForm() {
                         label="Create Account PIN"
                         value={form.pin}
                         onChange={(value) => updateField("pin", value)}
+                        length={6}
                         variant="compact"
                         required
                       />
@@ -411,10 +416,38 @@ export function ApplyForm() {
                         label="Confirm Account PIN"
                         value={form.confirmPin}
                         onChange={(value) => updateField("confirmPin", value)}
+                        length={6}
                         variant="compact"
                         required
                       />
                     </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <PinInput
+                        id="transactionPin"
+                        label="Create Transaction PIN"
+                        value={form.transactionPin}
+                        onChange={(value) => updateField("transactionPin", value)}
+                        length={4}
+                        variant="compact"
+                        required
+                      />
+                      <PinInput
+                        id="confirmTransactionPin"
+                        label="Confirm Transaction PIN"
+                        value={form.confirmTransactionPin}
+                        onChange={(value) =>
+                          updateField("confirmTransactionPin", value)
+                        }
+                        length={4}
+                        variant="compact"
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-northium-muted">
+                      Your 4-digit transaction PIN authorizes transfers and payments.
+                      It must be different from your 6-digit account sign-in PIN.
+                    </p>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">

@@ -154,6 +154,7 @@ export async function POST(request: Request) {
           .update({
             username: pending.username,
             pin_hash: pending.pin_hash,
+            transaction_pin_hash: pending.transaction_pin_hash,
             phone: pending.phone,
             email_verified_at: new Date().toISOString(),
             internal_auth_secret: pending.internal_auth_secret,
@@ -207,6 +208,7 @@ export async function POST(request: Request) {
           .update({
             username: pending.username,
             pin_hash: pending.pin_hash,
+            transaction_pin_hash: pending.transaction_pin_hash,
             phone: pending.phone,
             email_verified_at: new Date().toISOString(),
             internal_auth_secret: pending.internal_auth_secret,

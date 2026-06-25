@@ -1,8 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertLoanTransferAllowed,
   canTransferFromLoanTo,
   isLoanAccountType,
+  loanAccountAllowsTransferType,
 } from "../../src/lib/banking/loan-accounts.ts";
 
 describe("loan account transfers", () => {
@@ -16,5 +18,22 @@ describe("loan account transfers", () => {
     assert.equal(canTransferFromLoanTo("savings"), true);
     assert.equal(canTransferFromLoanTo("loan"), false);
     assert.equal(canTransferFromLoanTo("certificate"), false);
+  });
+
+  it("restricts loan accounts to internal transfers only", () => {
+    assert.equal(loanAccountAllowsTransferType("internal"), true);
+    assert.equal(loanAccountAllowsTransferType("local_wire"), false);
+    assert.equal(loanAccountAllowsTransferType("zelle"), false);
+
+    assert.doesNotThrow(() =>
+      assertLoanTransferAllowed("loan", "internal")
+    );
+    assert.throws(
+      () => assertLoanTransferAllowed("loan", "international_wire"),
+      /internal transfers/
+    );
+    assert.doesNotThrow(() =>
+      assertLoanTransferAllowed("checking", "local_wire")
+    );
   });
 });

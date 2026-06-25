@@ -7,6 +7,7 @@ import {
 
 export {
   formatTransferAccountLabel,
+  internalTransferDestinationHint,
   listInternalDestinationAccounts,
   pickDefaultInternalDestination,
   type TransferAccount,

@@ -115,12 +115,33 @@ export function AdminDashboard() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-[#0f2233] p-8 text-center text-sm text-white/50">
-        Use <strong className="text-northium-gold">Member Controls</strong> to fund
-        accounts, generate transaction history, and configure COT / IMF transfer
-        codes per member.
+      <div className="rounded-2xl border border-white/10 bg-[#0f2233] p-6 text-sm text-white/55">
+        <p>
+          Use <strong className="text-northium-gold">Member Tools</strong> for focused
+          tasks — each action has its own page so funding, transfer pauses, and security
+          codes are never mixed together.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <MemberToolLink href="/hard/member-tools" label="All member tools" />
+          <MemberToolLink href="/hard/member-tools/fund-accounts" label="Fund accounts" />
+          <MemberToolLink href="/hard/member-tools/generate-activity" label="Generate activity" />
+          <MemberToolLink href="/hard/member-tools/transfer-codes" label="Transfer codes" />
+        </div>
       </div>
     </div>
+  );
+}
+
+function MemberToolLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Button
+      variant="outline"
+      nativeButton={false}
+      render={<Link href={href} />}
+      className="rounded-xl border-white/15 bg-white/5 text-white hover:bg-white/10"
+    >
+      {label}
+    </Button>
   );
 }
 

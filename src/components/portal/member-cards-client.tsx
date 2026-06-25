@@ -200,16 +200,17 @@ export function MemberCardsClient() {
             </div>
             <PinInput
               id="card-apply-pin"
-              label="Account PIN"
+              label="4-Digit Transaction PIN"
               value={pin}
               onChange={setPin}
+              length={4}
               variant="compact"
               required
             />
             {error && <p className="text-sm text-red-600">{error}</p>}
             {message && <p className="text-sm text-northium-success">{message}</p>}
             <Button
-              disabled={loading || pin.length !== 6}
+              disabled={loading || pin.length !== 4}
               onClick={() => void apply()}
               className="bg-northium-primary hover:bg-northium-secondary"
             >

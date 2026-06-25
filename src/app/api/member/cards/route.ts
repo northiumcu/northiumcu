@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveMemberWrite, requireAuthenticatedMember } from "@/lib/auth/require-member";
-import { verifyPin } from "@/lib/auth/crypto";
-import { pinSchema } from "@/lib/auth/validators";
+import { transactionPinSchema } from "@/lib/auth/validators";
+import {
+  assertTransactionPinConfigured,
+  verifyTransactionPin,
+} from "@/lib/auth/transaction-pin";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { MASTERCARD_FEE } from "@/lib/banking/member-products";
 import { notifyMember } from "@/lib/banking/member-notifications";
@@ -12,7 +15,7 @@ import { formatCurrency } from "@/lib/format/currency";
 
 const applySchema = z.object({
   sourceAccountId: z.string().uuid(),
-  pin: pinSchema,
+  pin: transactionPinSchema,
 });
 
 function randomLastFour() {
@@ -73,12 +76,13 @@ export async function POST(request: Request) {
     const userId = auth.user.id;
     const { data: profile } = await admin
       .from("profiles")
-      .select("pin_hash, first_name, last_name")
+      .select("transaction_pin_hash, first_name, last_name")
       .eq("id", userId)
       .single();
 
-    if (!profile?.pin_hash || !verifyPin(parsed.data.pin, profile.pin_hash)) {
-      return NextResponse.json({ error: "Invalid account PIN." }, { status: 401 });
+    assertTransactionPinConfigured(profile?.transaction_pin_hash);
+    if (!verifyTransactionPin(parsed.data.pin, profile.transaction_pin_hash)) {
+      return NextResponse.json({ error: "Invalid transaction PIN." }, { status: 401 });
     }
 
     const { data: account } = await admin

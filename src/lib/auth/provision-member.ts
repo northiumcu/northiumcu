@@ -75,6 +75,7 @@ export async function provisionApprovedMember(
         last_name: input.lastName,
         phone: input.phone ?? null,
         pin_hash: hashPin(input.pin),
+        transaction_pin_hash: hashPin(input.transactionPin),
         internal_auth_secret: encryptSensitive(internalSecret),
         email_verified_at: new Date().toISOString(),
         staff_role: "member",

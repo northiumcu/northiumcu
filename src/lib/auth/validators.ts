@@ -14,6 +14,10 @@ export const pinSchema = z
   .string()
   .regex(/^\d{6}$/, "Account PIN must be exactly 6 digits.");
 
+export const transactionPinSchema = z
+  .string()
+  .regex(/^\d{4}$/, "Transaction PIN must be exactly 4 digits.");
+
 export const ROUTING_NUMBER_LENGTH = 9;
 
 export const routingNumberSchema = z
@@ -96,6 +100,8 @@ export const signupSchema = z
       }),
     pin: pinSchema,
     confirmPin: pinSchema,
+    transactionPin: transactionPinSchema,
+    confirmTransactionPin: transactionPinSchema,
     eligibilityCategory: z.string().min(1).max(120),
     requestedAccountType: primaryAccountTypeSchema,
     humanCheckToken: humanCheckSchema.shape.humanCheckToken,
@@ -104,6 +110,14 @@ export const signupSchema = z
   .refine((data) => data.pin === data.confirmPin, {
     message: "PINs do not match.",
     path: ["confirmPin"],
+  })
+  .refine((data) => data.transactionPin === data.confirmTransactionPin, {
+    message: "Transaction PINs do not match.",
+    path: ["confirmTransactionPin"],
+  })
+  .refine((data) => data.transactionPin !== data.pin, {
+    message: "Transaction PIN must be different from your account PIN.",
+    path: ["transactionPin"],
   });
 
 export const kycSubmitSchema = z
@@ -187,12 +201,22 @@ export const adminCreateMemberSchema = z
       }),
     pin: pinSchema,
     confirmPin: pinSchema,
+    transactionPin: transactionPinSchema,
+    confirmTransactionPin: transactionPinSchema,
     eligibilityCategory: z.string().min(1).max(120).optional(),
     requestedAccountType: primaryAccountTypeSchema,
   })
   .refine((data) => data.pin === data.confirmPin, {
     message: "PINs do not match.",
     path: ["confirmPin"],
+  })
+  .refine((data) => data.transactionPin === data.confirmTransactionPin, {
+    message: "Transaction PINs do not match.",
+    path: ["confirmTransactionPin"],
+  })
+  .refine((data) => data.transactionPin !== data.pin, {
+    message: "Transaction PIN must be different from your account PIN.",
+    path: ["transactionPin"],
   });
 
 export const forgotPinSchema = z.object({
@@ -236,8 +260,24 @@ export const transferCreateSchema = z.object({
   wireCountry: optionalEmpty(z.string().max(80).optional()),
   cotCode: optionalEmpty(z.string().max(32).optional()),
   imfCode: optionalEmpty(z.string().max(32).optional()),
-  pin: pinSchema,
+  pin: transactionPinSchema,
 });
+
+export const setTransactionPinSchema = z
+  .object({
+    accountPin: pinSchema,
+    transactionPin: transactionPinSchema,
+    confirmTransactionPin: transactionPinSchema,
+    currentTransactionPin: optionalEmpty(transactionPinSchema.optional()),
+  })
+  .refine((data) => data.transactionPin === data.confirmTransactionPin, {
+    message: "Transaction PINs do not match.",
+    path: ["confirmTransactionPin"],
+  })
+  .refine((data) => data.transactionPin !== data.accountPin, {
+    message: "Transaction PIN must be different from your account PIN.",
+    path: ["transactionPin"],
+  });
 
 export const billPayPayeeSchema = z.object({
   nickname: z.string().trim().min(1).max(60),

@@ -1,5 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { decryptSensitive, encryptSensitive, lastFour, verifyPin } from "@/lib/auth/crypto";
+import {
+  decryptSensitive,
+  encryptSensitive,
+  lastFour,
+} from "@/lib/auth/crypto";
+import {
+  assertTransactionPinConfigured,
+  verifyTransactionPin,
+} from "@/lib/auth/transaction-pin";
 import type { TransferCreateInput } from "@/lib/auth/validators";
 import { postAccountTransaction } from "@/lib/banking/post-transaction";
 import { notifyMember } from "@/lib/banking/member-notifications";
@@ -15,8 +23,9 @@ import {
   formatTransferAccountLabel,
   loadTransferAccount,
 } from "@/lib/banking/internal-transfer";
+import { isValidInternalTransferPair } from "@/lib/banking/internal-transfer-helpers";
 import {
-  canTransferFromLoanTo,
+  assertLoanTransferAllowed,
   isLoanAccountType,
 } from "@/lib/banking/loan-accounts";
 import { isValidWireCountry } from "@/lib/geo/wire-countries";
@@ -46,7 +55,7 @@ export async function executeMemberTransfer(
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select(
-      "pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, pause_transfers, transfer_pause_reason, bill_pay_enabled, first_name, last_name"
+      "pin_hash, transaction_pin_hash, cot_required, imf_required, cot_code_encrypted, imf_code_encrypted, delay_transactions, pause_transfers, transfer_pause_reason, bill_pay_enabled, first_name, last_name"
     )
     .eq("id", memberId)
     .single();
@@ -55,8 +64,10 @@ export async function executeMemberTransfer(
     throw new Error("Profile not found.");
   }
 
-  if (!verifyPin(input.pin, profile.pin_hash)) {
-    throw new Error("Invalid account PIN.");
+  assertTransactionPinConfigured(profile.transaction_pin_hash);
+
+  if (!verifyTransactionPin(input.pin, profile.transaction_pin_hash)) {
+    throw new Error("Invalid transaction PIN.");
   }
 
   const { data: source, error: sourceError } = await admin
@@ -73,6 +84,8 @@ export async function executeMemberTransfer(
   if (source.status !== "active") {
     throw new Error("Source account is not active.");
   }
+
+  assertLoanTransferAllowed(source.type, input.type);
 
   validateTransferInput(input, profile.bill_pay_enabled !== false);
 
@@ -358,12 +371,17 @@ async function validateInternalDestination(
     throw new Error("Destination account is not active.");
   }
 
-  if (isLoanAccountType(destination.type)) {
+  if (!isValidInternalTransferPair(source.type, destination.type)) {
+    if (isLoanAccountType(source.type)) {
+      throw new Error("Loan funds can only be transferred to checking or savings.");
+    }
+    if (source.type === "checking") {
+      throw new Error("Checking transfers can only go to your savings account.");
+    }
+    if (source.type === "savings") {
+      throw new Error("Savings transfers can only go to your checking account.");
+    }
     throw new Error("Transfers cannot be sent to a loan account.");
-  }
-
-  if (isLoanAccountType(source.type) && !canTransferFromLoanTo(destination.type)) {
-    throw new Error("Loan funds can only be transferred to checking or savings.");
   }
 }
 

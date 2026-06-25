@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { decryptSensitive, verifyPin } from "@/lib/auth/crypto";
-import { pinSchema } from "@/lib/auth/validators";
+import { decryptSensitive } from "@/lib/auth/crypto";
+import { transactionPinSchema } from "@/lib/auth/validators";
 import { requireActiveMemberWrite } from "@/lib/auth/require-member";
+import {
+  assertTransactionPinConfigured,
+  verifyTransactionPin,
+} from "@/lib/auth/transaction-pin";
 import { formatExpiryDisplay, formatPanDisplay } from "@/lib/banking/card-issuance";
 
 const detailsSchema = z.object({
-  pin: pinSchema,
+  pin: transactionPinSchema,
 });
 
 export async function POST(
@@ -21,17 +25,18 @@ export async function POST(
     const body = await request.json();
     const parsed = detailsSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Enter your 6-digit account PIN." }, { status: 400 });
+      return NextResponse.json({ error: "Enter your 4-digit transaction PIN." }, { status: 400 });
     }
 
     const { data: profile } = await auth.admin
       .from("profiles")
-      .select("pin_hash")
+      .select("transaction_pin_hash")
       .eq("id", auth.user.id)
       .single();
 
-    if (!profile?.pin_hash || !verifyPin(parsed.data.pin, profile.pin_hash)) {
-      return NextResponse.json({ error: "Invalid account PIN." }, { status: 401 });
+    assertTransactionPinConfigured(profile?.transaction_pin_hash);
+    if (!verifyTransactionPin(parsed.data.pin, profile.transaction_pin_hash)) {
+      return NextResponse.json({ error: "Invalid transaction PIN." }, { status: 401 });
     }
 
     const { data: card, error } = await auth.admin

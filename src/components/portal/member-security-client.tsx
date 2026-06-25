@@ -6,17 +6,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertsPanel } from "@/components/portal/alerts-panel";
+import { TransactionPinSetupForm } from "@/components/portal/transaction-pin-setup-form";
 
 export function MemberSecurityClient() {
   const [profile, setProfile] = useState<{
     email: string;
     member_status: string;
   } | null>(null);
+  const [transactionPinConfigured, setTransactionPinConfigured] = useState(false);
 
   useEffect(() => {
-    void fetch("/api/member/profile")
-      .then((r) => r.json())
-      .then((data) => setProfile(data.profile ?? null));
+    void Promise.all([
+      fetch("/api/member/profile").then((r) => r.json()),
+      fetch("/api/member/transaction-pin").then((r) => r.json()),
+    ]).then(([profileData, pinData]) => {
+      setProfile(profileData.profile ?? null);
+      setTransactionPinConfigured(Boolean(pinData.configured));
+    });
   }, []);
 
   return (
@@ -40,7 +46,7 @@ export function MemberSecurityClient() {
             </div>
             <p className="text-sm text-northium-muted">
               Northium protects your account with email verification plus your
-              6-digit PIN. There is no separate authenticator app to configure.
+              6-digit account PIN.
             </p>
           </CardContent>
         </Card>
@@ -53,8 +59,8 @@ export function MemberSecurityClient() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-northium-muted">
-              Your 6-digit PIN authorizes transfers, bill payments, and card
-              actions. Reset it anytime from the sign-in page if you forget it.
+              Your 6-digit account PIN is used to sign in. Reset it anytime from
+              the sign-in page if you forget it.
             </p>
             <Button
               variant="outline"
@@ -62,11 +68,42 @@ export function MemberSecurityClient() {
               render={<Link href="/sign-in" />}
               className="rounded-xl border-sky-200"
             >
-              Reset PIN from Sign In
+              Reset Account PIN
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      <Card className="overflow-hidden rounded-2xl border-amber-200/70 bg-gradient-to-br from-white to-amber-50/60 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Transaction PIN
+            </CardTitle>
+            <Badge
+              className={
+                transactionPinConfigured
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-900"
+              }
+            >
+              {transactionPinConfigured ? "Configured" : "Required"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-northium-muted">
+            Your 4-digit transaction PIN authorizes transfers, bill payments, and
+            card actions. It must be different from your 6-digit account PIN.
+          </p>
+          <TransactionPinSetupForm
+            configured={transactionPinConfigured}
+            onConfigured={() => setTransactionPinConfigured(true)}
+            variant="compact"
+            idPrefix="security"
+          />
+        </CardContent>
+      </Card>
 
       <div>
         <h2 className="mb-4 font-heading text-lg font-semibold text-northium-primary">

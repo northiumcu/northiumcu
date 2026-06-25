@@ -70,9 +70,9 @@ export default function AdminAccountsPage() {
         <Button
           className="bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
           nativeButton={false}
-          render={<Link href="/hard/member-controls" />}
+          render={<Link href="/hard/member-tools/fund-accounts" />}
         >
-          Open Member Controls
+          Fund Accounts
         </Button>
       </div>
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f2233]">

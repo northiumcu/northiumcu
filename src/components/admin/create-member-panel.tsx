@@ -30,6 +30,8 @@ export function CreateMemberPanel({ onCreated }: CreateMemberPanelProps) {
     phone: "",
     pin: "",
     confirmPin: "",
+    transactionPin: "",
+    confirmTransactionPin: "",
     eligibilityCategory: ELIGIBILITY_OPTIONS[0],
     requestedAccountType: "checking" as AccountType,
   });
@@ -79,6 +81,8 @@ export function CreateMemberPanel({ onCreated }: CreateMemberPanelProps) {
       phone: "",
       pin: "",
       confirmPin: "",
+      transactionPin: "",
+      confirmTransactionPin: "",
       eligibilityCategory: ELIGIBILITY_OPTIONS[0],
       requestedAccountType: "checking",
     });
@@ -172,18 +176,44 @@ export function CreateMemberPanel({ onCreated }: CreateMemberPanelProps) {
               label="Account PIN"
               value={form.pin}
               onChange={(value) => updateField("pin", value)}
+              length={6}
               variant="compact"
               required
             />
             <PinInput
               id="create-confirmPin"
-              label="Confirm PIN"
+              label="Confirm Account PIN"
               value={form.confirmPin}
               onChange={(value) => updateField("confirmPin", value)}
+              length={6}
               variant="compact"
               required
             />
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <PinInput
+              id="create-transactionPin"
+              label="Transaction PIN"
+              value={form.transactionPin}
+              onChange={(value) => updateField("transactionPin", value)}
+              length={4}
+              variant="compact"
+              required
+            />
+            <PinInput
+              id="create-confirmTransactionPin"
+              label="Confirm Transaction PIN"
+              value={form.confirmTransactionPin}
+              onChange={(value) => updateField("confirmTransactionPin", value)}
+              length={4}
+              variant="compact"
+              required
+            />
+          </div>
+          <p className="text-xs text-white/45">
+            Transaction PIN must be 4 digits and different from the account PIN.
+          </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

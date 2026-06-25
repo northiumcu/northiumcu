@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { compressImageToWebpDataUrl } from "@/lib/images/compress-avatar";
+import { Badge } from "@/components/ui/badge";
+import { TransactionPinSetupForm } from "@/components/portal/transaction-pin-setup-form";
 
 interface Profile {
   first_name: string;
@@ -29,17 +31,25 @@ export function MemberProfileClient() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [transactionPinConfigured, setTransactionPinConfigured] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadProfile = useCallback(async () => {
-    const response = await fetch("/api/member/profile");
-    const data = await response.json();
-    if (response.ok && data.profile) {
+    const [profileResponse, pinResponse] = await Promise.all([
+      fetch("/api/member/profile"),
+      fetch("/api/member/transaction-pin"),
+    ]);
+    const data = await profileResponse.json();
+    const pinData = await pinResponse.json();
+    if (profileResponse.ok && data.profile) {
       setProfile(data.profile);
       setFirstName(data.profile.first_name);
       setLastName(data.profile.last_name);
       setPhone(data.profile.phone ?? "");
       setPaused(Boolean(data.paused));
+    }
+    if (pinResponse.ok) {
+      setTransactionPinConfigured(Boolean(pinData.configured));
     }
   }, []);
 
@@ -184,6 +194,37 @@ export function MemberProfileClient() {
               </p>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden rounded-2xl border-amber-200/70 bg-gradient-to-br from-white to-amber-50/60 shadow-sm">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Transaction PIN
+            </CardTitle>
+            <Badge
+              className={
+                transactionPinConfigured
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-900"
+              }
+            >
+              {transactionPinConfigured ? "Configured" : "Required"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-northium-muted">
+            Your 4-digit transaction PIN authorizes transfers, bill payments, and
+            card actions. It must be different from your 6-digit account PIN.
+          </p>
+          <TransactionPinSetupForm
+            configured={transactionPinConfigured}
+            onConfigured={() => setTransactionPinConfigured(true)}
+            variant="compact"
+            idPrefix="profile"
+          />
         </CardContent>
       </Card>
 

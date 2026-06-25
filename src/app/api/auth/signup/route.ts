@@ -91,6 +91,7 @@ export async function POST(request: Request) {
         last_name: data.lastName.trim(),
         phone: data.phone?.trim() ?? null,
         pin_hash: hashPin(data.pin),
+        transaction_pin_hash: hashPin(data.transactionPin),
         internal_auth_secret: encryptSensitive(internalSecret),
         eligibility_category: data.eligibilityCategory,
         requested_account_types: accountTypesWithSavings(

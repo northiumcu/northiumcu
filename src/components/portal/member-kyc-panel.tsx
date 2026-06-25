@@ -5,6 +5,7 @@ import { Clock3, ShieldAlert } from "lucide-react";
 import { KycVerificationForm } from "@/components/auth/kyc-verification-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TransactionPinSetupForm } from "@/components/portal/transaction-pin-setup-form";
 
 interface KycStatus {
   applicationStatus: string | null;
@@ -16,14 +17,24 @@ interface KycStatus {
 export function MemberKycPanel() {
   const [status, setStatus] = useState<KycStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [transactionPinConfigured, setTransactionPinConfigured] = useState<
+    boolean | null
+  >(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const response = await fetch("/api/member/kyc");
-    const data = await response.json();
+    const [kycResponse, pinResponse] = await Promise.all([
+      fetch("/api/member/kyc"),
+      fetch("/api/member/transaction-pin"),
+    ]);
+    const data = await kycResponse.json();
+    const pinData = await pinResponse.json();
     setLoading(false);
-    if (response.ok) {
+    if (kycResponse.ok) {
       setStatus(data);
+    }
+    if (pinResponse.ok) {
+      setTransactionPinConfigured(Boolean(pinData.configured));
     }
   }, []);
 
@@ -74,11 +85,29 @@ export function MemberKycPanel() {
           Action Required
         </Badge>
       </CardHeader>
-      <CardContent className="pt-6">
+      <CardContent className="space-y-6 pt-6">
         {status.rejectionReason && (
-          <p className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             Previous verification was rejected: {status.rejectionReason}
           </p>
+        )}
+        {transactionPinConfigured === false && (
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4">
+            <h3 className="font-heading text-sm font-semibold text-northium-primary">
+              Transaction PIN
+            </h3>
+            <p className="mt-1 mb-4 text-sm text-northium-muted">
+              Create your 4-digit transaction PIN now. It must be different from
+              your 6-digit account sign-in PIN.
+            </p>
+            <TransactionPinSetupForm
+              configured={false}
+              onConfigured={() => setTransactionPinConfigured(true)}
+              variant="compact"
+              idPrefix="kyc"
+              submitLabel="Set your transaction PIN"
+            />
+          </div>
         )}
         <KycVerificationForm onSubmitted={load} />
       </CardContent>

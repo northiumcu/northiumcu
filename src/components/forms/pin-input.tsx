@@ -14,6 +14,8 @@ interface PinInputProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+  /** 6 = account PIN, 4 = transaction PIN */
+  length?: 4 | 6;
   /** Dots in the field only — no indicators or hint (apply form). */
   variant?: "default" | "compact";
 }
@@ -26,19 +28,24 @@ export function PinInput({
   disabled = false,
   required = false,
   className,
+  length = 6,
   variant = "default",
 }: PinInputProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const compact = variant === "compact";
   const [visible, setVisible] = useState(false);
+  const placeholder = "•".repeat(length);
+  const hint =
+    length === 4 ? "4-digit transaction PIN" : "6-digit account PIN";
+  const trackingClass = length === 4 ? "tracking-[0.65em]" : "tracking-[0.45em]";
 
   return (
     <div className={cn("space-y-2", className)}>
       <Label htmlFor={inputId}>{label}</Label>
       {!compact && (
         <div className="flex justify-center gap-2 py-1">
-          {Array.from({ length: 6 }).map((_, index) => (
+          {Array.from({ length }).map((_, index) => (
             <span
               key={index}
               aria-hidden
@@ -57,15 +64,15 @@ export function PinInput({
           id={inputId}
           type={visible ? "text" : "password"}
           inputMode="numeric"
-          pattern="\d{6}"
-          maxLength={6}
+          pattern={length === 4 ? "\\d{4}" : "\\d{6}"}
+          maxLength={length}
           value={value}
           onChange={(event) =>
-            onChange(event.target.value.replace(/\D/g, "").slice(0, 6))
+            onChange(event.target.value.replace(/\D/g, "").slice(0, length))
           }
-          className="rounded-xl pr-11 text-center tracking-[0.45em]"
+          className={cn("rounded-xl pr-11 text-center", trackingClass)}
           autoComplete="one-time-code"
-          placeholder="••••••"
+          placeholder={placeholder}
           disabled={disabled}
           required={required}
           aria-describedby={compact ? undefined : `${inputId}-hint`}
@@ -82,7 +89,7 @@ export function PinInput({
       </div>
       {!compact && (
         <p id={`${inputId}-hint`} className="text-center text-xs text-northium-muted">
-          6-digit PIN
+          {hint}
         </p>
       )}
     </div>

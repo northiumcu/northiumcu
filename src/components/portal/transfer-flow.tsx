@@ -10,13 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PinInput } from "@/components/forms/pin-input";
+import { TransactionPinSetupForm } from "@/components/portal/transaction-pin-setup-form";
 import { AmountInput } from "@/components/forms/amount-input";
 import { sanitizeRoutingNumberInput } from "@/lib/auth/validators";
 import {
   formatTransferAccountLabel,
+  internalTransferDestinationHint,
   listInternalDestinationAccounts,
   pickDefaultInternalDestination,
 } from "@/lib/banking/internal-transfer";
+import { isLoanAccountType } from "@/lib/banking/loan-accounts";
 import { WIRE_COUNTRIES } from "@/lib/geo/wire-countries";
 import { formatCurrency, parseAmountInput } from "@/lib/format/currency";
 
@@ -151,11 +154,22 @@ export function TransferFlow() {
   const [failedProgress, setFailedProgress] = useState(60);
   const [processingSlow, setProcessingSlow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [transactionPinConfigured, setTransactionPinConfigured] = useState<
+    boolean | null
+  >(null);
   const submitLockRef = useRef(false);
 
   const isZelle = type === "zelle";
   const showConfirm = !isZelle;
   const sourceAccount = accounts.find((account) => account.id === sourceAccountId);
+  const sourceIsLoan = sourceAccount ? isLoanAccountType(sourceAccount.type) : false;
+  const availableTransferTypes = useMemo(
+    () =>
+      sourceIsLoan
+        ? transferTypes.filter((item) => item.value === "internal")
+        : transferTypes,
+    [sourceIsLoan]
+  );
   const internalDestinationAccounts = useMemo(
     () => listInternalDestinationAccounts(accounts, sourceAccountId),
     [accounts, sourceAccountId]
@@ -163,7 +177,7 @@ export function TransferFlow() {
   const showSecurityCodes =
     transferRequiresSecurityCodes(type) && (cotRequired || imfRequired);
   const pinStepReady =
-    pin.length === 6 &&
+    pin.length === 4 &&
     (!showSecurityCodes ||
       ((!cotRequired || cotCode.trim().length > 0) &&
         (!imfRequired || imfCode.trim().length > 0)));
@@ -180,7 +194,15 @@ export function TransferFlow() {
           fromAccountId && active.some((a: Account) => a.id === fromAccountId)
             ? fromAccountId
             : active[0]?.id;
-        if (preferredSource) setSourceAccountId(preferredSource);
+        if (preferredSource) {
+          setSourceAccountId(preferredSource);
+          const preferredAccount = active.find(
+            (account: Account) => account.id === preferredSource
+          );
+          if (preferredAccount && isLoanAccountType(preferredAccount.type)) {
+            setType("internal");
+          }
+        }
         const defaultDestination = pickDefaultInternalDestination(
           active,
           preferredSource ?? ""
@@ -193,15 +215,29 @@ export function TransferFlow() {
         setCotRequired(Boolean(data.cotRequired));
         setImfRequired(Boolean(data.imfRequired));
       });
+    void fetch("/api/member/transaction-pin")
+      .then((r) => r.json())
+      .then((data) => {
+        setTransactionPinConfigured(Boolean(data.configured));
+      });
   }, [fromAccountId]);
 
   useEffect(() => {
+    if (sourceIsLoan && type !== "internal") {
+      setType("internal");
+    }
+  }, [sourceIsLoan, type]);
+
+  useEffect(() => {
     if (type !== "internal" || !sourceAccountId) return;
+    const nextDestination = internalDestinationAccounts[0];
+    if (!nextDestination) return;
+
     const valid = internalDestinationAccounts.some(
       (account) => account.id === destinationAccountId
     );
-    if (!valid && internalDestinationAccounts[0]) {
-      setDestinationAccountId(internalDestinationAccounts[0].id);
+    if (!valid || internalDestinationAccounts.length === 1) {
+      setDestinationAccountId(nextDestination.id);
     }
   }, [
     type,
@@ -346,8 +382,8 @@ export function TransferFlow() {
       setError("Enter your IMF code to continue.");
       return;
     }
-    if (pin.length !== 6) {
-      setError("Enter your 6-digit account PIN.");
+    if (pin.length !== 4) {
+      setError("Enter your 4-digit transaction PIN.");
       return;
     }
 
@@ -527,17 +563,26 @@ export function TransferFlow() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Transfer Type</Label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
-              >
-                {transferTypes.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              {sourceIsLoan ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Loan disbursement accounts can only send{" "}
+                  <strong>internal transfers</strong> to your checking or savings
+                  accounts. External wires, Zelle, and direct deposit are not
+                  available from this account.
+                </div>
+              ) : (
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                >
+                  {availableTransferTypes.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="space-y-2">
               <Label>From Account</Label>
@@ -545,6 +590,12 @@ export function TransferFlow() {
                 value={sourceAccountId}
                 onChange={(e) => {
                   const nextSourceId = e.target.value;
+                  const nextSource = accounts.find(
+                    (account) => account.id === nextSourceId
+                  );
+                  if (nextSource && isLoanAccountType(nextSource.type)) {
+                    setType("internal");
+                  }
                   setSourceAccountId(nextSourceId);
                   syncDestinationForSource(nextSourceId);
                 }}
@@ -564,26 +615,47 @@ export function TransferFlow() {
                 <Label>To Account</Label>
                 {internalDestinationAccounts.length === 0 ? (
                   <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    Add another active checking or savings account, or fund a loan
-                    disbursement account, to move money internally.
+                    {sourceAccount
+                      ? internalTransferDestinationHint(sourceAccount.type)
+                      : "Select a source account to see eligible destinations."}
                   </p>
                 ) : (
-                  <select
-                    value={destinationAccountId}
-                    onChange={(e) => setDestinationAccountId(e.target.value)}
-                    className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
-                    required
-                  >
-                    <option value="">Select account</option>
-                    {internalDestinationAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {formatTransferAccountLabel(account)}
-                        {account.available_balance !== undefined
-                          ? ` — ${formatCurrency(account.available_balance)}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <p className="text-xs text-northium-muted">
+                      {sourceAccount
+                        ? internalTransferDestinationHint(sourceAccount.type)
+                        : null}
+                    </p>
+                    {internalDestinationAccounts.length === 1 ? (
+                      (() => {
+                        const onlyDestination = internalDestinationAccounts[0]!;
+                        return (
+                          <div className="rounded-xl border border-northium-border bg-slate-50 px-3 py-2.5 text-sm text-northium-primary">
+                            {formatTransferAccountLabel(onlyDestination)}
+                            {onlyDestination.available_balance !== undefined
+                              ? ` — ${formatCurrency(onlyDestination.available_balance)}`
+                              : ""}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <select
+                        value={destinationAccountId}
+                        onChange={(e) => setDestinationAccountId(e.target.value)}
+                        className="w-full rounded-xl border border-northium-border bg-white px-3 py-2 text-sm"
+                        required
+                      >
+                        {internalDestinationAccounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {formatTransferAccountLabel(account)}
+                            {account.available_balance !== undefined
+                              ? ` — ${formatCurrency(account.available_balance)}`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -779,7 +851,45 @@ export function TransferFlow() {
         </Card>
       )}
 
-      {step === "pin" && (
+      {step === "pin" && transactionPinConfigured === null && (
+        <Card className="rounded-2xl border-northium-border shadow-sm">
+          <CardContent className="py-10 text-center text-sm text-northium-muted">
+            Loading security settings…
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "pin" && transactionPinConfigured === false && (
+        <Card className="rounded-2xl border-amber-200/80 bg-gradient-to-br from-white to-amber-50/40 shadow-sm">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg text-northium-primary">
+              Transaction PIN Required
+            </CardTitle>
+            <p className="text-sm text-northium-muted">
+              Set up your 4-digit transaction PIN before you can authorize this
+              transfer. It must be different from your 6-digit account PIN.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <TransactionPinSetupForm
+              configured={false}
+              onConfigured={() => setTransactionPinConfigured(true)}
+              variant="compact"
+              idPrefix="transfer"
+              submitLabel="Set your transaction PIN"
+            />
+            <Button
+              variant="outline"
+              onClick={() => setStep(showConfirm ? "confirm" : "details")}
+              className="w-full"
+            >
+              Back
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "pin" && transactionPinConfigured === true && (
         <Card className="rounded-2xl border-northium-border shadow-sm">
           <CardHeader>
             <CardTitle className="font-heading text-lg text-northium-primary">
@@ -789,8 +899,8 @@ export function TransferFlow() {
             </CardTitle>
             {showSecurityCodes && (
               <p className="text-sm text-northium-muted">
-                Enter your security code(s), then your account PIN to complete
-                this transfer.
+                Enter your security code(s), then your 4-digit transaction PIN to
+                complete this transfer.
               </p>
             )}
           </CardHeader>
@@ -835,14 +945,15 @@ export function TransferFlow() {
             <div className="space-y-2">
               {showSecurityCodes && (
                 <p className="text-xs font-semibold uppercase tracking-wider text-northium-muted">
-                  Step 2 — Account PIN
+                  Step 2 — Transaction PIN
                 </p>
               )}
               <PinInput
                 id="transfer-pin"
-                label="6-Digit Account PIN"
+                label="4-Digit Transaction PIN"
                 value={pin}
                 onChange={setPin}
+                length={4}
                 variant="compact"
                 required
               />

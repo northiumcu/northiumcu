@@ -86,14 +86,15 @@ export function NorthiumMastercard({
               )}
             </div>
             <p className="mb-3 text-[11px] leading-relaxed text-white/60">
-              Enter your account PIN to view your full card number and security code.
+              Enter your 4-digit transaction PIN to view your full card number and security code.
             </p>
             {onDetailsPinChange && (
               <PinInput
                 id="card-details-pin"
-                label="Account PIN"
+                label="4-Digit Transaction PIN"
                 value={detailsPin}
                 onChange={onDetailsPinChange}
+                length={4}
                 variant="compact"
                 required
                 className="[&_label]:text-white/70 [&_input]:border-white/20 [&_input]:bg-white/10 [&_input]:text-white"
@@ -107,7 +108,7 @@ export function NorthiumMastercard({
                 <Button
                   type="button"
                   size="sm"
-                  disabled={detailsLoading || detailsPin.length !== 6}
+                  disabled={detailsLoading || detailsPin.length !== 4}
                   onClick={onRevealDetails}
                   className="flex-1 bg-northium-gold text-[#06121c] hover:bg-northium-gold/90"
                 >
