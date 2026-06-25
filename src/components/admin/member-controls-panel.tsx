@@ -41,7 +41,11 @@ const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
-export function MemberControlsPanel() {
+export function MemberControlsPanel({
+  refreshToken = 0,
+}: {
+  refreshToken?: number;
+}) {
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -82,14 +86,12 @@ export function MemberControlsPanel() {
     }
     const list = (data.members ?? []) as MemberRecord[];
     setMembers(list);
-    if (!selectedId && list[0]) {
-      setSelectedId(list[0].id);
-    }
-  }, [selectedId]);
+    setSelectedId((current) => current || list[0]?.id || "");
+  }, []);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   useEffect(() => {
     if (!selected) return;

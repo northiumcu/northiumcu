@@ -148,6 +148,32 @@ export const signupResendSchema = z.object({
   email: z.string().email("Enter a valid email address."),
 });
 
+export const adminCreateMemberSchema = z
+  .object({
+    username: usernameSchema,
+    email: z.string().email(),
+    firstName: z.string().trim().min(1).max(80),
+    lastName: z.string().trim().min(1).max(80),
+    phone: z
+      .string()
+      .optional()
+      .transform((value) => {
+        const digits = (value ?? "").replace(/\D/g, "");
+        return digits.length > 0 ? digits : undefined;
+      })
+      .refine((value) => value === undefined || value.length === 10, {
+        message: "Phone number must be 10 digits.",
+      }),
+    pin: pinSchema,
+    confirmPin: pinSchema,
+    eligibilityCategory: z.string().min(1).max(120).optional(),
+    requestedAccountType: primaryAccountTypeSchema,
+  })
+  .refine((data) => data.pin === data.confirmPin, {
+    message: "PINs do not match.",
+    path: ["confirmPin"],
+  });
+
 export const forgotPinSchema = z.object({
   username: usernameSchema,
 });

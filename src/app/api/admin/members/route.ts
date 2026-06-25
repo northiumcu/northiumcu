@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth/require-staff";
+import { provisionApprovedMember } from "@/lib/auth/provision-member";
+import { adminCreateMemberSchema } from "@/lib/auth/validators";
 
 export async function GET() {
   try {
@@ -52,6 +54,39 @@ export async function GET() {
     return NextResponse.json({ members });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load members.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await requireStaff();
+    if ("error" in auth) return auth.error;
+
+    const body = await request.json();
+    const parsed = adminCreateMemberSchema.safeParse(body);
+    if (!parsed.success) {
+      const firstError = Object.values(parsed.error.flatten().fieldErrors)
+        .flat()
+        .find(Boolean);
+      return NextResponse.json(
+        { error: firstError ?? "Invalid member details." },
+        { status: 400 }
+      );
+    }
+
+    const member = await provisionApprovedMember(
+      auth.admin,
+      auth.user.id,
+      parsed.data
+    );
+
+    return NextResponse.json({
+      message: "Member created and approved.",
+      member,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create member.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
