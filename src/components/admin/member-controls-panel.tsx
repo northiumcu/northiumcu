@@ -6,6 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AdminActionFeedback,
+  type AdminFeedback,
+} from "@/components/admin/admin-action-feedback";
 
 interface MemberAccount {
   id: string;
@@ -34,6 +38,15 @@ interface MemberRecord {
   accounts: MemberAccount[] | null;
 }
 
+type FeedbackSection =
+  | "load"
+  | "access"
+  | "fund"
+  | "generate"
+  | "delay"
+  | "billPay"
+  | "profile";
+
 const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
   "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
@@ -50,9 +63,10 @@ export function MemberControlsPanel({
   const [members, setMembers] = useState<MemberRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<Partial<Record<FeedbackSection, AdminFeedback>>>(
+    {}
+  );
 
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustDescription, setAdjustDescription] = useState("");
@@ -77,19 +91,38 @@ export function MemberControlsPanel({
 
   const accounts = selected?.accounts ?? [];
 
+  const showFeedback = useCallback(
+    (section: FeedbackSection, type: "success" | "error", text: string) => {
+      setFeedback((current) => ({
+        ...current,
+        [section]: { type, text },
+      }));
+    },
+    []
+  );
+
+  const clearFeedback = useCallback((section: FeedbackSection) => {
+    setFeedback((current) => {
+      const next = { ...current };
+      delete next[section];
+      return next;
+    });
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const response = await fetch("/api/admin/members");
     const data = await response.json();
     setLoading(false);
     if (!response.ok) {
-      setError(data.error ?? "Failed to load members.");
+      showFeedback("load", "error", data.error ?? "Failed to load members.");
       return;
     }
+    clearFeedback("load");
     const list = (data.members ?? []) as MemberRecord[];
     setMembers(list);
     setSelectedId((current) => current || list[0]?.id || "");
-  }, []);
+  }, [clearFeedback, showFeedback]);
 
   useEffect(() => {
     void load();
@@ -112,8 +145,7 @@ export function MemberControlsPanel({
   async function handleAdjust(direction: "credit" | "debit") {
     if (!selectedAccountId || !adjustAmount) return;
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    clearFeedback("fund");
     const response = await fetch(`/api/admin/accounts/${selectedAccountId}/adjust`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -126,11 +158,13 @@ export function MemberControlsPanel({
     const data = await response.json();
     setBusy(false);
     if (!response.ok) {
-      setError(data.error ?? "Adjustment failed.");
+      showFeedback("fund", "error", data.error ?? "Adjustment failed.");
       return;
     }
-    setMessage(
-      `${direction === "credit" ? "Funded" : "Debited"} $${Number(adjustAmount).toFixed(2)}. New balance: $${Number(data.balance).toFixed(2)}`
+    showFeedback(
+      "fund",
+      "success",
+      `${direction === "credit" ? "Funded" : "Debited"} $${Number(adjustAmount).toFixed(2)}. New balance: $${Number(data.balance).toFixed(2)}.`
     );
     setAdjustAmount("");
     void load();
@@ -139,8 +173,7 @@ export function MemberControlsPanel({
   async function handleGenerate() {
     if (!selected || !selectedAccountId) return;
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    clearFeedback("generate");
     const response = await fetch(
       `/api/admin/members/${selected.id}/generate-transactions`,
       {
@@ -158,11 +191,14 @@ export function MemberControlsPanel({
     const data = await response.json();
     setBusy(false);
     if (!response.ok) {
-      setError(data.error ?? "Generation failed.");
+      showFeedback("generate", "error", data.error ?? "Generation failed.");
       return;
     }
-    setMessage(
-      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}). Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
+    const company = employerCompanyName.trim() || "Employer Payroll";
+    showFeedback(
+      "generate",
+      "success",
+      `Generated ${data.summary.credits} credits ($${Number(data.summary.totalCreditAmount).toFixed(2)}) and ${data.summary.debits} debits ($${Number(data.summary.totalDebitAmount).toFixed(2)}). Payroll credits use ${company} twice weekly. Ending balance: $${Number(data.summary.endingBalance ?? data.account?.available_balance ?? 0).toFixed(2)}.`
     );
     void load();
   }
@@ -170,8 +206,7 @@ export function MemberControlsPanel({
   async function handleSaveProfile() {
     if (!selected) return;
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    clearFeedback("profile");
     const response = await fetch(`/api/admin/members/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -188,10 +223,10 @@ export function MemberControlsPanel({
     const data = await response.json();
     setBusy(false);
     if (!response.ok) {
-      setError(data.error ?? "Save failed.");
+      showFeedback("profile", "error", data.error ?? "Save failed.");
       return;
     }
-    setMessage("Member profile and transfer codes updated.");
+    showFeedback("profile", "success", "Member profile and transfer codes updated.");
     setCotCode("");
     setImfCode("");
     void load();
@@ -212,8 +247,7 @@ export function MemberControlsPanel({
     if (!confirmed) return;
 
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    clearFeedback("access");
     const response = await fetch(`/api/admin/members/${selected.id}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -222,10 +256,12 @@ export function MemberControlsPanel({
     const data = await response.json();
     setBusy(false);
     if (!response.ok) {
-      setError(data.error ?? "Status update failed.");
+      showFeedback("access", "error", data.error ?? "Status update failed.");
       return;
     }
-    setMessage(
+    showFeedback(
+      "access",
+      "success",
       memberStatus === "active"
         ? "Member access restored."
         : memberStatus === "paused"
@@ -245,18 +281,6 @@ export function MemberControlsPanel({
           Fund accounts, generate activity, and configure transfer security codes.
         </p>
       </div>
-
-      {(message || error) && (
-        <div
-          className={`rounded-xl border px-4 py-3 text-sm ${
-            error
-              ? "border-red-500/30 bg-red-500/10 text-red-200"
-              : "border-northium-gold/30 bg-northium-gold/10 text-northium-gold"
-          }`}
-        >
-          {error ?? message}
-        </div>
-      )}
 
       <Card className="rounded-2xl border-white/10 bg-[#0f2233] text-white shadow-none">
         <CardHeader>
@@ -314,6 +338,7 @@ export function MemberControlsPanel({
               )}
             </>
           )}
+          <AdminActionFeedback feedback={feedback.load ?? null} />
         </CardContent>
       </Card>
 
@@ -360,6 +385,7 @@ export function MemberControlsPanel({
                 Restore Access
               </Button>
             </div>
+            <AdminActionFeedback feedback={feedback.access ?? null} />
           </CardContent>
         </Card>
       )}
@@ -425,6 +451,7 @@ export function MemberControlsPanel({
                     Debit
                   </Button>
                 </div>
+                <AdminActionFeedback feedback={feedback.fund ?? null} />
               </CardContent>
             </Card>
 
@@ -496,6 +523,7 @@ export function MemberControlsPanel({
                 >
                   Generate Activity
                 </Button>
+                <AdminActionFeedback feedback={feedback.generate ?? null} />
               </CardContent>
             </Card>
           </div>
@@ -520,13 +548,22 @@ export function MemberControlsPanel({
                   const next = !delayTransactions;
                   setDelayTransactions(next);
                   setBusy(true);
-                  await fetch(`/api/admin/members/${selected.id}`, {
+                  clearFeedback("delay");
+                  const response = await fetch(`/api/admin/members/${selected.id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ delayTransactions: next }),
                   });
+                  const data = await response.json();
                   setBusy(false);
-                  setMessage(
+                  if (!response.ok) {
+                    setDelayTransactions(!next);
+                    showFeedback("delay", "error", data.error ?? "Update failed.");
+                    return;
+                  }
+                  showFeedback(
+                    "delay",
+                    "success",
                     next
                       ? "DELAY TRANSACTION is ON for this member."
                       : "DELAY TRANSACTION is OFF — transfers process immediately."
@@ -541,6 +578,7 @@ export function MemberControlsPanel({
               >
                 {delayTransactions ? "DELAY TRANSACTION — ON" : "DELAY TRANSACTION — OFF"}
               </Button>
+              <AdminActionFeedback feedback={feedback.delay ?? null} />
             </CardContent>
           </Card>
 
@@ -561,13 +599,22 @@ export function MemberControlsPanel({
                   const next = !billPayEnabled;
                   setBillPayEnabled(next);
                   setBusy(true);
-                  await fetch(`/api/admin/members/${selected.id}`, {
+                  clearFeedback("billPay");
+                  const response = await fetch(`/api/admin/members/${selected.id}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ billPayEnabled: next }),
                   });
+                  const data = await response.json();
                   setBusy(false);
-                  setMessage(
+                  if (!response.ok) {
+                    setBillPayEnabled(!next);
+                    showFeedback("billPay", "error", data.error ?? "Update failed.");
+                    return;
+                  }
+                  showFeedback(
+                    "billPay",
+                    "success",
                     next
                       ? "Bill Pay is ON for this member."
                       : "Bill Pay is OFF for this member."
@@ -582,6 +629,7 @@ export function MemberControlsPanel({
               >
                 {billPayEnabled ? "BILL PAY — ON" : "BILL PAY — OFF"}
               </Button>
+              <AdminActionFeedback feedback={feedback.billPay ?? null} />
             </CardContent>
           </Card>
 
@@ -640,6 +688,7 @@ export function MemberControlsPanel({
               >
                 Save Profile & Codes
               </Button>
+              <AdminActionFeedback feedback={feedback.profile ?? null} />
             </CardContent>
           </Card>
         </>

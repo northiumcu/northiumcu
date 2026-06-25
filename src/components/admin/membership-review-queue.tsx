@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  AdminActionFeedback,
+  type AdminFeedback,
+} from "@/components/admin/admin-action-feedback";
 
 interface KycRecord {
   id: string;
@@ -82,8 +86,8 @@ export function MembershipReviewQueue() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [decisionFeedback, setDecisionFeedback] = useState<AdminFeedback>(null);
+  const [loadFeedback, setLoadFeedback] = useState<AdminFeedback>(null);
   const [rejectReason, setRejectReason] = useState(
     "We could not verify your application at this time."
   );
@@ -96,7 +100,7 @@ export function MembershipReviewQueue() {
     setLoading(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Failed to load applications.");
+      setLoadFeedback({ type: "error", text: data.error ?? "Failed to load applications." });
       return;
     }
 
@@ -106,7 +110,7 @@ export function MembershipReviewQueue() {
       if (current && list.some((app) => app.id === current)) return current;
       return list[0]?.id ?? null;
     });
-    setError(null);
+    setLoadFeedback(null);
   }, []);
 
   useEffect(() => {
@@ -128,8 +132,7 @@ export function MembershipReviewQueue() {
 
   async function approve(id: string, requireKyc: boolean) {
     setBusyId(id);
-    setMessage(null);
-    setError(null);
+    setDecisionFeedback(null);
 
     const response = await fetch(`/api/admin/applications/${id}/approve`, {
       method: "POST",
@@ -140,20 +143,20 @@ export function MembershipReviewQueue() {
     setBusyId(null);
 
     if (!response.ok) {
-      setError(data.error ?? "Approval failed.");
+      setDecisionFeedback({ type: "error", text: data.error ?? "Approval failed." });
       return;
     }
 
-    setMessage(
-      `Approved${requireKyc ? " with KYC" : " without KYC"}. Account number ${data.account?.account_number ?? "issued"}.`
-    );
+    setDecisionFeedback({
+      type: "success",
+      text: `Approved${requireKyc ? " with KYC" : " without KYC"}. Account number ${data.account?.account_number ?? "issued"}.`,
+    });
     await load();
   }
 
   async function markPending(id: string) {
     setBusyId(id);
-    setMessage(null);
-    setError(null);
+    setDecisionFeedback(null);
 
     const response = await fetch(`/api/admin/applications/${id}/pending`, {
       method: "POST",
@@ -164,18 +167,20 @@ export function MembershipReviewQueue() {
     setBusyId(null);
 
     if (!response.ok) {
-      setError(data.error ?? "Update failed.");
+      setDecisionFeedback({ type: "error", text: data.error ?? "Update failed." });
       return;
     }
 
-    setMessage("Application marked pending review.");
+    setDecisionFeedback({
+      type: "success",
+      text: "Application marked pending review.",
+    });
     await load();
   }
 
   async function reject(id: string) {
     setBusyId(id);
-    setMessage(null);
-    setError(null);
+    setDecisionFeedback(null);
 
     const response = await fetch(`/api/admin/applications/${id}/reject`, {
       method: "POST",
@@ -186,11 +191,14 @@ export function MembershipReviewQueue() {
     setBusyId(null);
 
     if (!response.ok) {
-      setError(data.error ?? "Rejection failed.");
+      setDecisionFeedback({ type: "error", text: data.error ?? "Rejection failed." });
       return;
     }
 
-    setMessage("Application rejected and member notified.");
+    setDecisionFeedback({
+      type: "success",
+      text: "Application rejected and member notified.",
+    });
     setShowRejectForm(false);
     await load();
   }
@@ -221,19 +229,7 @@ export function MembershipReviewQueue() {
         </Button>
       </div>
 
-      {(message || error) && (
-        <div
-          className={cn(
-            "rounded-xl border px-4 py-3 text-sm",
-            error
-              ? "border-red-500/30 bg-red-500/10 text-red-100"
-              : "border-northium-gold/30 bg-northium-gold/10 text-northium-gold"
-          )}
-          role={error ? "alert" : "status"}
-        >
-          {error ?? message}
-        </div>
-      )}
+      <AdminActionFeedback feedback={loadFeedback} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
         <section className="rounded-2xl border border-white/10 bg-[#0b1824]">
@@ -470,6 +466,8 @@ export function MembershipReviewQueue() {
                     </div>
                   </div>
                 )}
+
+                <AdminActionFeedback feedback={decisionFeedback} className="mt-4" />
               </div>
             </div>
           )}

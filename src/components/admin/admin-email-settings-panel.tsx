@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AdminActionFeedback,
+  type AdminFeedback,
+} from "@/components/admin/admin-action-feedback";
 
 interface EmailStatus {
   configured: boolean;
@@ -20,8 +24,8 @@ export function AdminEmailSettingsPanel() {
   const [apiKey, setApiKey] = useState("");
   const [fromEmail, setFromEmail] = useState("helpdesk@northiumcu.com");
   const [testEmail, setTestEmail] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<AdminFeedback>(null);
+  const [loadFeedback, setLoadFeedback] = useState<AdminFeedback>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -31,7 +35,7 @@ export function AdminEmailSettingsPanel() {
       setStatus(data);
       setFromEmail(data.storedFromEmail ?? data.defaultFromEmail ?? "helpdesk@northiumcu.com");
     } else {
-      setError(data.error ?? "Failed to load email settings.");
+      setLoadFeedback({ type: "error", text: data.error ?? "Failed to load email settings." });
     }
   }, []);
 
@@ -41,8 +45,7 @@ export function AdminEmailSettingsPanel() {
 
   async function save(andTest = false) {
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    setActionFeedback(null);
 
     const response = await fetch("/api/admin/settings/email", {
       method: "PATCH",
@@ -57,19 +60,18 @@ export function AdminEmailSettingsPanel() {
     setBusy(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Save failed.");
+      setActionFeedback({ type: "error", text: data.error ?? "Save failed." });
       return;
     }
 
-    setMessage(data.message ?? "Saved.");
+    setActionFeedback({ type: "success", text: data.message ?? "Saved." });
     setApiKey("");
     void load();
   }
 
   async function sendTest() {
     setBusy(true);
-    setMessage(null);
-    setError(null);
+    setActionFeedback(null);
 
     const response = await fetch("/api/admin/settings/email", {
       method: "POST",
@@ -82,11 +84,11 @@ export function AdminEmailSettingsPanel() {
     setBusy(false);
 
     if (!response.ok) {
-      setError(data.error ?? "Test failed.");
+      setActionFeedback({ type: "error", text: data.error ?? "Test failed." });
       return;
     }
 
-    setMessage(data.message ?? "Test email sent.");
+    setActionFeedback({ type: "success", text: data.message ?? "Test email sent." });
     void load();
   }
 
@@ -107,6 +109,8 @@ export function AdminEmailSettingsPanel() {
           <p className="mt-1">Sender: {status.from}</p>
         </div>
       )}
+
+      <AdminActionFeedback feedback={loadFeedback} />
 
       <p className="text-sm text-white/55">
         If Vercel environment variables are not working, paste your Resend API key
@@ -147,9 +151,6 @@ export function AdminEmailSettingsPanel() {
         />
       </div>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
-      {message && <p className="text-sm text-northium-gold">{message}</p>}
-
       <div className="flex flex-wrap gap-3">
         <Button
           disabled={busy || (!apiKey.trim() && !fromEmail.trim())}
@@ -175,6 +176,8 @@ export function AdminEmailSettingsPanel() {
           Send Test Only
         </Button>
       </div>
+
+      <AdminActionFeedback feedback={actionFeedback} />
     </div>
   );
 }

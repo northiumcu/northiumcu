@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/membership-options";
 import { PinInput } from "@/components/forms/pin-input";
 import { formatUSPhoneInput } from "@/lib/format/phone";
+import { AdminActionFeedback } from "@/components/admin/admin-action-feedback";
 
 interface CreateMemberPanelProps {
   onCreated?: () => void;
@@ -222,17 +223,6 @@ export function CreateMemberPanel({ onCreated }: CreateMemberPanelProps) {
             </div>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-300" role="alert">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p className="rounded-xl border border-northium-gold/30 bg-northium-gold/10 px-3 py-2 text-sm text-northium-gold" role="status">
-              {success}
-            </p>
-          )}
-
           <Button
             type="submit"
             disabled={loading}
@@ -240,6 +230,16 @@ export function CreateMemberPanel({ onCreated }: CreateMemberPanelProps) {
           >
             {loading ? "Creating member..." : "Create & Approve Member"}
           </Button>
+
+          <AdminActionFeedback
+            feedback={
+              error
+                ? { type: "error", text: error }
+                : success
+                  ? { type: "success", text: success }
+                  : null
+            }
+          />
         </form>
       </CardContent>
     </Card>
