@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { brand } from "@/lib/brand";
 
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
   return (
-    <Link href="/" className={className} aria-label={`${brand.name} home`}>
+    <Link href={href} className={className} aria-label={`${brand.name} home`}>
       <div className="flex items-center gap-3">
         <div className="flex size-9 items-center justify-center rounded-lg bg-northium-gold">
           <span className="font-heading text-sm font-extrabold text-northium-primary">

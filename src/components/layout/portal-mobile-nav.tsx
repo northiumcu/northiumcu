@@ -12,11 +12,13 @@ import type { PortalNavItem } from "@/components/layout/portal-nav-shared";
 interface PortalMobileNavProps {
   nav: readonly PortalNavItem[];
   title: string;
+  homeHref?: string;
 }
 
 export function PortalMobileNav({
   nav,
   title,
+  homeHref = "/member",
 }: PortalMobileNavProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -33,16 +35,16 @@ export function PortalMobileNav({
   const ActiveIcon = iconMap[activeItem.icon];
 
   return (
-    <div className="border-b border-northium-border bg-white lg:hidden">
+    <div className="sticky top-0 z-40 border-b border-northium-border bg-white lg:hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
+        <Link href={homeHref} className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest text-northium-muted">
             {title}
           </p>
           <p className="truncate font-heading text-sm font-semibold text-northium-primary">
             {activeItem.label}
           </p>
-        </div>
+        </Link>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-northium-border bg-northium-surface px-3 text-sm font-medium text-northium-primary"
@@ -95,7 +97,7 @@ export function PortalMobileNav({
                 type="button"
                 onClick={async () => {
                   await fetch("/api/auth/signout", { method: "POST" });
-                  window.location.href = "/";
+                  window.location.href = "/sign-in";
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-northium-border px-4 py-3 text-sm font-medium text-northium-primary"
               >

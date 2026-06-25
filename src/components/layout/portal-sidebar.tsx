@@ -37,18 +37,20 @@ export const iconMap = {
 interface PortalSidebarProps {
   nav: readonly PortalNavItem[];
   title: string;
+  homeHref?: string;
 }
 
 export function PortalSidebar({
   nav,
   title,
+  homeHref = "/member",
 }: PortalSidebarProps) {
   const pathname = usePathname();
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-northium-border bg-white lg:flex">
       <div className="border-b border-northium-border p-6">
-        <Logo />
+        <Logo href={homeHref} />
         <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-northium-muted">
           {title}
         </p>
@@ -83,7 +85,7 @@ export function PortalSidebar({
           type="button"
           onClick={async () => {
             await fetch("/api/auth/signout", { method: "POST" });
-            window.location.href = "/";
+            window.location.href = "/sign-in";
           }}
           className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-northium-muted transition-colors hover:bg-northium-surface hover:text-northium-primary"
         >

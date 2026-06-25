@@ -7,6 +7,7 @@ import {
   isAdminConsolePath,
   isLegacyAdminPath,
 } from "@/lib/auth/admin-paths";
+import { isPublicMarketingPath, MEMBER_HOME } from "@/lib/auth/member-shell";
 import { X_ROBOTS_TAG } from "@/lib/security/crawl-block";
 
 const MEMBER_PREFIX = "/member";
@@ -117,6 +118,32 @@ async function runSession(request: NextRequest) {
       memberUrl.pathname = "/member";
       memberUrl.search = "";
       return withCrawlBlock(NextResponse.redirect(memberUrl));
+    }
+  }
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("staff_role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.staff_role === "member") {
+      if (isPublicMarketingPath(pathname)) {
+        const memberUrl = request.nextUrl.clone();
+        memberUrl.pathname = MEMBER_HOME;
+        memberUrl.search = "";
+        return withCrawlBlock(NextResponse.redirect(memberUrl));
+      }
+
+      if (pathname === "/sign-in" || pathname === "/apply") {
+        const memberUrl = request.nextUrl.clone();
+        const next = request.nextUrl.searchParams.get("next");
+        memberUrl.pathname =
+          next && next.startsWith(MEMBER_PREFIX) ? next : MEMBER_HOME;
+        memberUrl.search = "";
+        return withCrawlBlock(NextResponse.redirect(memberUrl));
+      }
     }
   }
 
